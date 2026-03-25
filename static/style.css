@@ -54,7 +54,9 @@ form > input[type=submit] {
 }
 
 form > input[type=text] {
-  width: 200pt;
+  width: 100%;
+  max-width: 300pt;
+  box-sizing: border-box;
 }
 
 /* Notifications */

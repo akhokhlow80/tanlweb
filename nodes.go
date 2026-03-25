@@ -115,7 +115,6 @@ func (app *app) putNode(w http.ResponseWriter, r *http.Request) error {
 		if err := app.RenderNotification(w, Notification{Ok: true, Message: "Updated"}); err != nil {
 			return err
 		}
-
 	}
 
 	return app.tmpl.ExecuteTemplate(w, "nodes/view", nodeView{
