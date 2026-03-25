@@ -8,7 +8,6 @@
 body {
   font-size: 12pt;
   font-family: 'Hack Nerd Font Mono Regular';
-  max-width: 500pt;
   margin: 15pt;
 }
 
@@ -29,6 +28,15 @@ main *:not(h1, h2, h3, div, button) {
 
 #navigation {
   margin-bottom: 10pt;
+}
+
+#navigation > a {
+  text-decoration: none;
+  color: #3483eb;
+}
+
+#navigation > a.current {
+  text-decoration: underline;
 }
 
 /* Forms */
@@ -108,6 +116,7 @@ form > input[type=text] {
 
 table {
   margin: 5pt;
+  margin-top: 20pt;
   border-collapse: collapse;
   display: block;
   overflow-x: auto;

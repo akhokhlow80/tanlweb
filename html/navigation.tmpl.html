@@ -1,19 +1,22 @@
 <div id="navigation">
   <a
-    {{if ne . `peers`}}
-      href="/admin/peers"
+    href="/admin/peers"
+    {{if eq . `peers`}}
+      class="current"
     {{end}}>
     Peers
   </a>
   <a
-    {{if ne . `users`}}
-      href="/admin/users"
+    href="/admin/users"
+    {{if eq . `users`}}
+      class="current"
     {{end}}>
     Users
   </a>
   <a
-    {{if ne . `nodes`}}
-      href="/admin/nodes"
+    href="/admin/nodes"
+    {{if eq . `nodes`}}
+      class="current"
     {{end}}>
     Nodes
   </a>
