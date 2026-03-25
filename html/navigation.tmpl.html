@@ -1,0 +1,20 @@
+<div id="navigation">
+  <a
+    {{if ne . `peers`}}
+      href="/admin/peers"
+    {{end}}>
+    Peers
+  </a>
+  <a
+    {{if ne . `users`}}
+      href="/admin/users"
+    {{end}}>
+    Users
+  </a>
+  <a
+    {{if ne . `nodes`}}
+      href="/admin/nodes"
+    {{end}}>
+    Nodes
+  </a>
+</div>

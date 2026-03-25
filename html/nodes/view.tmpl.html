@@ -1,0 +1,32 @@
+<div id="node-view" hx-swap-oob="true">
+  {{if .UUID}}
+    <h2>View &amp; edit node</h2>
+  {{else}}
+    <h2>Add new node</h2>
+  {{end}}
+
+  <form
+    id="node-config-form"
+    hx-swap="none"
+    {{if .UUID}}
+      hx-put="/admin/nodes/{{.UUID}}"
+    {{else}}
+      hx-post="/admin/nodes"
+    {{end}}
+    hx-disabled-elt="find input[type='submit']"
+  >
+    <label for="name" class="required">Name</label>
+    <span id="invalid-name"></span>
+    <input id="name" name="name" type="text" value="{{.Name}}" />
+
+    <label for="base-uri" class="required">Base URI</label>
+    <span id="invalid-base-uri"></span>
+    <input id="base-uri" name="base-uri" type="text" value="{{.BaseURI}}" style="width: 300pt" />
+
+    <input
+      class="submit"
+      type="submit"
+      value="{{if .UUID}}Save{{else}}Create{{end}}"
+    />
+  </form>
+</div>

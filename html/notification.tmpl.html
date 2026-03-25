@@ -1,0 +1,10 @@
+<div hx-swap-oob="beforeend:#notifications-container">
+  <div class="notification">
+    {{if .Ok}}
+      <span class="ok">&#10003;</span>
+    {{else}}
+      <span class="error">&#10007</span>
+    {{end}}
+    {{.Message}}
+  </div>
+</div>

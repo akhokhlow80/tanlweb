@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    {{template "head" "Node"}}
+  </head>
+  <body>
+    <div id="notifications-container"></div>
+    {{template "navigation" "nodes"}}
+    <main>
+      {{template "nodes/view" .}}
+      {{if .UUID}}
+      {{else}}
+        <!-- To be OOB replaced after the node is created -->
+        <div id="peers-list"></div>
+      {{end}}
+    </main>
+    <main>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,131 @@
+@font-face {
+    font-family: 'Hack Nerd Font Mono Regular';
+    font-style: normal;
+    font-weight: normal;
+    src: local('Hack Nerd Font Mono Regular'), url('/static/fonts/HackNerdFontMono-Regular.ttf') format('truetype');
+}
+
+body {
+  font-size: 12pt;
+  font-family: 'Hack Nerd Font Mono Regular';
+  max-width: 500pt;
+  margin: 15pt;
+}
+
+a {
+  color: #3483eb;
+}
+
+a:not([href]) {
+  text-decoration: none;
+  color: #8483eb;
+}
+
+main *:not(h1, h2, h3, div, button) {
+  margin-left: 5pt;
+}
+
+/* Navigation */
+
+#navigation {
+  margin-bottom: 10pt;
+}
+
+/* Forms */
+
+form > * {
+  display: block;
+  margin: 5pt 0;
+  font-size: 12pt;
+  font-family: 'Hack Nerd Font Mono Regular';
+}
+
+form .error {
+  font-size: 10pt;
+  color: #eb3434;
+}
+
+form > label {
+  margin-top: 10pt;
+}
+
+form > input[type=submit] {
+  margin-top: 15pt;
+}
+
+form > input[type=text] {
+  width: 200pt;
+}
+
+/* Notifications */
+
+#notifications-container {
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+@keyframes notification-fadein {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes notification-disappear {
+  from { }
+  to { margin: 0; height: 0; padding: 0; }
+}
+
+.notification {
+  background-color: rgb(200, 200, 200);
+  margin: 5pt;
+  padding: 5pt;
+
+  animation-name: notification-fadein, notification-disappear;
+  animation-duration: 4s, 1s;
+  animation-delay: 3s, 5s;
+  animation-fill-mode: forwards, forwards;
+}
+
+.notification-fatal {
+  background-color: rgb(200, 130, 130);
+}
+
+.notification .ok {
+  color: rgb(34, 186, 34);
+}
+
+.notification .error {
+  color: #eb3434;
+}
+
+/* Tables */
+
+table {
+  margin: 5pt;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+table thead {
+  background-color: rgb(220, 220, 220);
+}
+
+table tr.disabled {
+  background-color: rgb(240, 150, 150);
+}
+
+table td {
+  padding: 5pt;
+  border: 1px solid;
+  border-color: rgb(150, 150, 150);
+}
+
+input.add-new {
+  margin: 10pt;
+}
