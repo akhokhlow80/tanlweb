@@ -39,10 +39,12 @@ func (app *app) HTMXErrorHandler(w http.ResponseWriter, r *http.Request, hErr er
 	n.Ok = false
 	switch hErr {
 	case ErrParseForm:
+		fallthrough
 	case ErrNotFound:
 		n.Message = hErr.Error()
 	default:
 		n.Message = "Internal server error"
+		reqlog.Printf(r, "Internal server error: %s", hErr)
 	}
 	err := app.RenderNotification(w, n)
 	if err != nil {
