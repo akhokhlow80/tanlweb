@@ -6,6 +6,7 @@ import (
 	"akhokhlow80/tanlweb/web"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -90,6 +91,8 @@ func (app *app) putNode(w http.ResponseWriter, r *http.Request) error {
 		if err := app.RenderNotification(w, Notification{Ok: true, Message: "Created"}); err != nil {
 			return err
 		}
+
+		w.Header().Add("HX-Replace-Url", fmt.Sprintf("/admin/users/%s", dbNode.Uuid))
 	} else {
 		dbNode, err = func() (sqlgen.Node, error) {
 			defer app.db.Unlock()
