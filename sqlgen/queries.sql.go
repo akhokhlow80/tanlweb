@@ -7,6 +7,7 @@ package sqlgen
 
 import (
 	"context"
+	"time"
 )
 
 const addNode = `-- name: AddNode :one
@@ -35,6 +36,76 @@ func (q *Queries) AddNode(ctx context.Context, arg AddNodeParams) (Node, error) 
 		&i.Uuid,
 		&i.Name,
 		&i.BaseUri,
+	)
+	return i, err
+}
+
+const addUser = `-- name: AddUser :one
+INSERT INTO users (
+    uuid,
+    description,
+    scopes,
+    fee,
+    is_banned
+) VALUES (
+    ?1,
+    ?2,
+    ?3,
+    ?4,
+    FALSE
+) RETURNING id, uuid, description, scopes, fee, paid_until, is_banned
+`
+
+type AddUserParams struct {
+	Uuid        string
+	Description string
+	Scopes      string
+	Fee         string
+}
+
+func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, addUser,
+		arg.Uuid,
+		arg.Description,
+		arg.Scopes,
+		arg.Fee,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Description,
+		&i.Scopes,
+		&i.Fee,
+		&i.PaidUntil,
+		&i.IsBanned,
+	)
+	return i, err
+}
+
+const banUser = `-- name: BanUser :one
+UPDATE users SET
+    is_banned = ?1
+WHERE uuid = ?2
+RETURNING id, uuid, description, scopes, fee, paid_until, is_banned
+`
+
+type BanUserParams struct {
+	Banned bool
+	Uuid   string
+}
+
+func (q *Queries) BanUser(ctx context.Context, arg BanUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, banUser, arg.Banned, arg.Uuid)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Description,
+		&i.Scopes,
+		&i.Fee,
+		&i.PaidUntil,
+		&i.IsBanned,
 	)
 	return i, err
 }
@@ -88,6 +159,61 @@ func (q *Queries) GetNodes(ctx context.Context) ([]Node, error) {
 	return items, nil
 }
 
+const getUser = `-- name: GetUser :one
+SELECT id, uuid, description, scopes, fee, paid_until, is_banned FROM users
+WHERE uuid = ?1
+`
+
+func (q *Queries) GetUser(ctx context.Context, uuid string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUser, uuid)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Description,
+		&i.Scopes,
+		&i.Fee,
+		&i.PaidUntil,
+		&i.IsBanned,
+	)
+	return i, err
+}
+
+const getUsers = `-- name: GetUsers :many
+SELECT id, uuid, description, scopes, fee, paid_until, is_banned FROM users
+`
+
+func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
+	rows, err := q.db.QueryContext(ctx, getUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.Description,
+			&i.Scopes,
+			&i.Fee,
+			&i.PaidUntil,
+			&i.IsBanned,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeNode = `-- name: RemoveNode :execrows
 DELETE FROM nodes WHERE id = ?1
 `
@@ -122,6 +248,69 @@ func (q *Queries) UpdateNode(ctx context.Context, arg UpdateNodeParams) (Node, e
 		&i.Uuid,
 		&i.Name,
 		&i.BaseUri,
+	)
+	return i, err
+}
+
+const updateUser = `-- name: UpdateUser :one
+UPDATE users SET
+    description = ?1,
+    scopes = ?2,
+    fee = ?3
+WHERE uuid = ?4
+RETURNING id, uuid, description, scopes, fee, paid_until, is_banned
+`
+
+type UpdateUserParams struct {
+	Description string
+	Scopes      string
+	Fee         string
+	Uuid        string
+}
+
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUser,
+		arg.Description,
+		arg.Scopes,
+		arg.Fee,
+		arg.Uuid,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Description,
+		&i.Scopes,
+		&i.Fee,
+		&i.PaidUntil,
+		&i.IsBanned,
+	)
+	return i, err
+}
+
+const updateUserPaidUntil = `-- name: UpdateUserPaidUntil :one
+UPDATE users SET
+    paid_until = ?1
+WHERE uuid = ?2
+RETURNING id, uuid, description, scopes, fee, paid_until, is_banned
+`
+
+type UpdateUserPaidUntilParams struct {
+	PaidUntil *time.Time
+	Uuid      string
+}
+
+func (q *Queries) UpdateUserPaidUntil(ctx context.Context, arg UpdateUserPaidUntilParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUserPaidUntil, arg.PaidUntil, arg.Uuid)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Description,
+		&i.Scopes,
+		&i.Fee,
+		&i.PaidUntil,
+		&i.IsBanned,
 	)
 	return i, err
 }

@@ -85,10 +85,14 @@ func (app *app) initTmpl() error {
 func (app *app) listen() error {
 	adminMux := http.NewServeMux()
 	app.registerNodeHandlers(adminMux)
+	app.registerUsersHandlers(adminMux)
 
 	mux := http.NewServeMux()
+	// TODO: enable cache for static files
 	mux.Handle("/static/", http.FileServer(http.FS(staticFiles)))
+	// TODO: disable cache for pages
 	mux.Handle("/admin/", http.StripPrefix("/admin",
+		// FIXME: log middleware prints stripped URL
 		web.LogMiddleware(adminMux),
 	))
 	log.Printf("Binding to %s", app.cfg.HTTPBind)

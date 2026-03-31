@@ -25,3 +25,45 @@ SELECT * FROM nodes;
 -- name: GetNodeByUUID :one
 SELECT * FROM nodes
 WHERE uuid = @uuid;
+
+-- name: AddUser :one
+INSERT INTO users (
+    uuid,
+    description,
+    scopes,
+    fee,
+    is_banned
+) VALUES (
+    @uuid,
+    @description,
+    @scopes,
+    @fee,
+    FALSE
+) RETURNING *;
+
+-- name: GetUsers :many
+SELECT * FROM users;
+
+-- name: GetUser :one
+SELECT * FROM users
+WHERE uuid = @uuid;
+
+-- name: UpdateUser :one
+UPDATE users SET
+    description = @description,
+    scopes = @scopes,
+    fee = @fee
+WHERE uuid = @uuid
+RETURNING *;
+
+-- name: BanUser :one
+UPDATE users SET
+    is_banned = @banned
+WHERE uuid = @uuid
+RETURNING *;
+
+-- name: UpdateUserPaidUntil :one
+UPDATE users SET
+    paid_until = @paid_until
+WHERE uuid = @uuid
+RETURNING *;

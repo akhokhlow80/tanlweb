@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    {{template "head" "Nodes list"}}
+  </head>
+  <body>
+    {{template "navigation" "nodes"}}
+    <table>
+      <thead>
+        <tr>
+          <td>Name</td>
+          <td>Base URI</td>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .}}
+          <tr>
+            <td><a href="/admin/nodes/{{.UUID}}">{{.Name}}</a></td>
+            <td>{{.BaseURI}}</td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+    <form action="/admin/nodes/new" method="get">
+      <input type="submit" class="add-new" value="+ Add new" />
+    </form>
+  </body>
+</html>
+

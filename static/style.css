@@ -9,6 +9,7 @@ body {
   font-size: 12pt;
   font-family: 'Hack Nerd Font Mono Regular';
   margin: 15pt;
+  max-width: 500pt;
 }
 
 a {
@@ -22,6 +23,10 @@ a:not([href]) {
 
 main *:not(h1, h2, h3, div, button) {
   margin-left: 5pt;
+}
+
+hr {
+  margin-top: 20pt;
 }
 
 /* Navigation */
@@ -65,6 +70,39 @@ form > input[type=text] {
   width: 100%;
   max-width: 300pt;
   box-sizing: border-box;
+}
+
+input[type="checkbox"] {
+  display: inline-block;
+}
+
+label.checkbox {
+  display: inline-block;
+  margin-left: 1pt;
+}
+
+/* Fields */
+
+.field {
+  display: inline;
+}
+
+.field * {
+  display: inline;
+}
+
+.field > .name {
+  font-weight: 700;
+  margin-bottom: 5pt;
+}
+
+.long-value-container {
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  padding: 0;
+  margin: 5pt;
 }
 
 /* Notifications */
@@ -139,4 +177,30 @@ table td {
 
 input.add-new {
   margin: 10pt;
+}
+
+/* Users */
+
+#user-paid-until-form {
+  margin-top: 20pt;
+}
+
+#user-paid-until-form .submit {
+  margin-top: 7pt;
+}
+
+#user-status-form {
+  margin-top: 20pt;
+}
+
+#user-status-form .submit {
+  margin-top: 7pt;
+}
+
+.user-status-active {
+  color: #238c3f;
+}
+
+.user-status-banned {
+  color: #b02121;
 }

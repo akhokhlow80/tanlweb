@@ -4,9 +4,23 @@
 
 package sqlgen
 
+import (
+	"time"
+)
+
 type Node struct {
 	ID      int64
 	Uuid    string
 	Name    string
 	BaseUri string
+}
+
+type User struct {
+	ID          int64
+	Uuid        string
+	Description string
+	Scopes      string
+	Fee         string
+	PaidUntil   *time.Time
+	IsBanned    bool
 }

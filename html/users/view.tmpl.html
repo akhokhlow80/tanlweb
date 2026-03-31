@@ -1,0 +1,123 @@
+<div id="user-view" hx-swap-oob="true">
+  {{if .UUID}}
+    <h2>View &amp; edit user</h2>
+  {{else}}
+    <h2>Add new user</h2>
+  {{end}}
+
+  <form
+    id="user-config-form"
+    hx-swap="none"
+    {{if .UUID}}
+      hx-put="/admin/users/{{.UUID}}"
+    {{else}}
+      hx-post="/admin/users"
+    {{end}}
+    hx-disabled-elt="find input[type='submit']"
+  >
+    <label for="description" class="required">Description (seen only by admins)</label>
+    <input id="description" name="description" type="text" value="{{.Description}}"/>
+
+    <div>
+      <p>Scopes (grant only to admin users)</p>
+      <div>
+        <input type="checkbox" name="scope-nodes"
+          {{if .Scopes.Nodes}}
+            checked
+          {{end}}
+         />
+        <label for="scopes-nodes" class="checkbox">nodes:rw</label>
+      </div>
+
+      <div>
+        <input type="checkbox" name="scope-users"
+          {{if .Scopes.Users}}
+            checked
+          {{end}}
+        />
+        <label for="scope-users" class="checkbox">users:rw</label>
+      </div>
+
+      <div>
+        <input type="checkbox" name="scope-peers"
+          {{if .Scopes.Peers}}
+            checked
+          {{end}}
+        />
+        <label for="scope-peers" class="checkbox">peers:rw</label>
+      </div>
+    </div>
+
+    <label for="fee" class="required">Fee (leave empty if you don't want to charge the user)</label>
+    <input id="fee" name="fee" type="text" value="{{.Fee}}" />
+
+    <input
+      class="submit"
+      type="submit"
+      value="{{if .UUID}}Save{{else}}Create{{end}}"
+    />
+  </form>
+
+  {{if .UUID}}
+    <hr>
+
+    <form
+      id="user-paid-until-form"
+      hx-swap="none"
+      hx-put="/admin/users/{{.UUID}}/paid-until"
+      hx-disabled-elt="find input[type='submit']"
+    >
+      <div id="user-paid-until-container" class="field">
+        <p class="name">Paid until:</p>
+        <input
+          type="date"
+          name="paid-until"
+          value="{{.PaidUntil}}"
+          {{if not .Fee}}
+            disabled
+          {{end}}
+        >
+      </div>
+      {{if not .Fee}}
+        <p>
+          This user is not charged and won't be suspended after the end of the paid period.
+        </p>
+      {{else}}
+        <input class="submit" type="submit" value="Update"/>
+      {{end}}
+    </form>
+
+    <hr>
+  
+    <form
+      id="user-status-form"
+      hx-swap="none"
+      hx-put="/admin/users/{{.UUID}}/ban"
+      hx-disabled-elt="find input[type='submit']"
+    >
+      <div id="user-status-container" class="field">
+        <p class="name">Status:</p>
+        {{if .IsBanned}}
+          <p class="user-status-banned">
+            Banned
+          </p>
+        {{else}}
+          <p class="user-status-active">
+            Active
+          </p>
+        {{end}}
+      </div>
+      <!-- TODO: show suspended status -->
+      <input
+        name="ban"
+        type="hidden"
+        {{if .IsBanned}}
+          value="false"
+        {{else}}
+          value="true"
+        {{end}}
+      />
+      <input class="submit" type="submit" value="{{if .IsBanned}}Unban{{else}}Ban{{end}}"/>
+    </form>
+  {{end}}
+</div>
