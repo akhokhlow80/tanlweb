@@ -1,6 +1,7 @@
 package main
 
 import (
+	"akhokhlow80/tanlweb/scopes"
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
 	"database/sql"
@@ -8,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,55 +24,11 @@ func (app *app) registerUsersHandlers(m *http.ServeMux) {
 	m.HandleFunc("GET /users", web.FailableHandler(app.StandardErrorHandler, app.usersList))
 }
 
-type userErrors struct {
-}
-
-type userScopes struct {
-	Users bool
-	Nodes bool
-	Peers bool
-}
-
-func parseUserScopes(strScopes string) userScopes {
-	var ret userScopes
-	if len(strScopes) == 0 {
-		return ret
-	}
-	for scope := range strings.SplitSeq(strScopes, ",") {
-		scope = strings.TrimSpace(scope)
-		switch scope {
-		case "users":
-			ret.Users = true
-		case "nodes":
-			ret.Nodes = true
-		case "peers":
-			ret.Peers = true
-		default:
-			log.Printf("Warning: unknown scope `%s` found while parsing scopes `%s`", scope, strScopes)
-		}
-	}
-	return ret
-}
-
-func (scopes *userScopes) String() string {
-	var scopesArr []string
-	if scopes.Users {
-		scopesArr = append(scopesArr, "users")
-	}
-	if scopes.Nodes {
-		scopesArr = append(scopesArr, "nodes")
-	}
-	if scopes.Peers {
-		scopesArr = append(scopesArr, "peers")
-	}
-	return strings.Join(scopesArr, ",")
-}
-
 type userView struct {
 	UUID        string
 	Description string
 	Fee         string
-	Scopes      userScopes
+	Scopes      scopes.Scopes
 	PaidUntil   string
 	IsBanned    bool
 }
@@ -82,11 +38,15 @@ func userViewFromDB(dbUser *sqlgen.User) userView {
 	if dbUser.PaidUntil != nil {
 		paidUntil = dbUser.PaidUntil.Format("2006-01-02")
 	}
+	scopes, err := scopes.Parse(dbUser.Scopes)
+	if err != nil {
+		log.Printf("Failed to parse scopes `%s` from DB of user `%s`: %s", dbUser.Scopes, dbUser.Uuid, err)
+	}
 	return userView{
 		UUID:        dbUser.Uuid,
 		Description: dbUser.Description,
 		Fee:         dbUser.Fee,
-		Scopes:      parseUserScopes(dbUser.Scopes),
+		Scopes:      scopes,
 		PaidUntil:   paidUntil,
 		IsBanned:    dbUser.IsBanned,
 	}
@@ -109,7 +69,7 @@ func (app *app) putUser(w http.ResponseWriter, r *http.Request) error {
 	}
 	description := web.FormScalar(r.Form, "description")
 	fee := web.FormTrimmedScalar(r.Form, "fee")
-	var scopes userScopes
+	var scopes scopes.Scopes
 	if web.FormTrimmedScalar(r.Form, "scope-users") == "on" {
 		scopes.Users = true
 	}
@@ -233,7 +193,7 @@ func (app *app) putUserBan(w http.ResponseWriter, r *http.Request) error {
 	} else {
 		msg = "Unbanned"
 	}
-	
+
 	if err := app.RenderNotification(w, Notification{Ok: true, Message: msg}); err != nil {
 		return err
 	}

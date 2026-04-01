@@ -8,6 +8,8 @@ import (
 
 var ErrParseForm = errors.New("Error parsing form")
 var ErrNotFound = errors.New("Not found")
+var ErrUnauthorized = errors.New("Unauthorized")
+var ErrForbidden = errors.New("Access Denied")
 
 func (app *app) StandardErrorHandler(w http.ResponseWriter, r *http.Request, hErr error) {
 	var errorView struct {
@@ -22,11 +24,17 @@ func (app *app) StandardErrorHandler(w http.ResponseWriter, r *http.Request, hEr
 		errorView.Status = http.StatusBadRequest
 	case ErrNotFound:
 		errorView.Status = http.StatusNotFound
+	case ErrUnauthorized:
+		errorView.Status = http.StatusUnauthorized
+	case ErrForbidden:
+		errorView.Status = http.StatusForbidden
 	default:
 		errorView.Status = http.StatusInternalServerError
 		errorView.Message = "Internal server error"
 		reqlog.Printf(r, "Internal server error: %s", hErr)
 	}
+
+	w.WriteHeader(errorView.Status)
 
 	err := app.tmpl.ExecuteTemplate(w, "error", errorView)
 	if err != nil {
@@ -39,8 +47,14 @@ func (app *app) HTMXErrorHandler(w http.ResponseWriter, r *http.Request, hErr er
 	n.Ok = false
 	switch hErr {
 	case ErrParseForm:
-		fallthrough
+		n.Message = hErr.Error()
 	case ErrNotFound:
+		n.Message = hErr.Error()
+	case ErrUnauthorized:
+		w.WriteHeader(http.StatusUnauthorized)
+		n.Message = hErr.Error()
+	case ErrForbidden:
+		w.WriteHeader(http.StatusForbidden)
 		n.Message = hErr.Error()
 	default:
 		n.Message = "Internal server error"

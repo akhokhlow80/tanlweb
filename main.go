@@ -3,28 +3,36 @@ package main
 import (
 	"akhokhlow80/tanlweb/db"
 	"akhokhlow80/tanlweb/sqlgen"
+	"akhokhlow80/tanlweb/tokens"
 	"akhokhlow80/tanlweb/web"
 	"database/sql"
 	"embed"
+	"encoding/base64"
 	"html/template"
 	"io/fs"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/pressly/goose/v3"
 )
 
 type config struct {
-	HTTPBind string `env:"HTTP_BIND,required"`
-	DBPath   string `env:"DB_PATH,required"`
+	HTTPBind             string `env:"HTTP_BIND,required"`
+	DBPath               string `env:"DB_PATH,required"`
+	AuthPrivateKey       string `env:"AUTH_PRIV_KEY,required"`
+	RefreshTokenLifetime int    `env:"REFRESH_TOKEN_LIFETIME_SECS,required"`
+	AccessTokenLifetime  int    `env:"ACCESS_TOKEN_LIFETIME_SECS,required"`
 }
 
 type app struct {
-	cfg  config
-	db   db.DB
-	tmpl *template.Template
+	cfg           config
+	db            db.DB
+	tmpl          *template.Template
+	accessTokens  tokens.Service
+	refreshTokens tokens.Service
 }
 
 var (
@@ -117,6 +125,16 @@ func main() {
 	if err = app.initTmpl(); err != nil {
 		log.Fatalf("Failed to init templates: %s", err)
 	}
+
+	authPrivateKey, err := base64.StdEncoding.DecodeString(app.cfg.AuthPrivateKey)
+	if err != nil {
+		log.Fatalf("Failed to parse private key: %s", err)
+	}
+	if len(authPrivateKey) < 128 {
+		log.Fatalf("Key lenght is not safe")
+	}
+	app.accessTokens = tokens.New(authPrivateKey, time.Second*time.Duration(app.cfg.AccessTokenLifetime))
+	app.accessTokens = tokens.New(authPrivateKey, time.Second*time.Duration(app.cfg.RefreshTokenLifetime))
 
 	log.Fatal(app.listen())
 }
