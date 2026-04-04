@@ -1,6 +1,9 @@
 package auth
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
 type Subject struct {
 	ID     string
@@ -20,15 +23,15 @@ var ErrInvalidToken = errors.New("Invalid token")
 
 type SubjectsRepo interface {
 	// Returns ErrSubjectNotFound if no such subject was found.
-	Get(subID string, loginVersion int) (StoredSubject, error)
+	Get(ctx context.Context, subID string, loginVersion int) (StoredSubject, error)
 
 	// Returns updated stored subject.
 	// Errors: ErrSubjectNotFound, ...
-	NextLoginVersion(subID string) (StoredSubject, error)
+	NextLoginVersion(ctx context.Context, subID string) (StoredSubject, error)
 
 	// Updates only if the subject exists, version matches and they weren't logged in,
 	// otherwise ErrSubjectNotFound is returned.
-	LoggedIn(subID string, loginVersion int) (StoredSubject, error)
+	LoggedIn(ctx context.Context, subID string, loginVersion int) (StoredSubject, error)
 }
 
 type Service struct {
@@ -54,8 +57,8 @@ func NewService(repo SubjectsRepo, loginTokenCfg, refreshTokenCfg, accessTokenCf
 	}
 }
 
-func (s *Service) IssueLoginToken(subID string) (string, error) {
-	storedSub, err := s.repo.NextLoginVersion(subID)
+func (s *Service) IssueLoginToken(ctx context.Context, subID string) (string, error) {
+	storedSub, err := s.repo.NextLoginVersion(ctx, subID)
 	if err != nil {
 		return "", err
 	}
@@ -70,12 +73,12 @@ func (s *Service) IssueLoginToken(subID string) (string, error) {
 }
 
 // Errors: ErrSubjectNotFound, ErrInvalidToken, ...
-func (s *Service) LoginForRefreshToken(loginTokenStr string) (string, error) {
+func (s *Service) LoginForRefreshToken(ctx context.Context, loginTokenStr string) (string, error) {
 	parsedClaims, err := parseToken(&s.loginCfg, tokenLogin, loginTokenStr)
 	if err != nil {
 		return "", ErrInvalidToken
 	}
-	subject, err := s.repo.LoggedIn(parsedClaims.ID, parsedClaims.LoginVersion)
+	subject, err := s.repo.LoggedIn(ctx, parsedClaims.ID, parsedClaims.LoginVersion)
 	if err != nil {
 		return "", err
 	}
@@ -93,7 +96,7 @@ func (s *Service) LoginForRefreshToken(loginTokenStr string) (string, error) {
 // Returns non-empty newAccessToken if it was renewed (only on successful auth).
 //
 // Errors: ErrSubjectNotFound, ErrInvalidToken, ...
-func (s *Service) Authenticate(accessTokenStr, refreshTokenStr string) (
+func (s *Service) Authenticate(ctx context.Context, accessTokenStr, refreshTokenStr string) (
 	newAccessToken string,
 	sub *Subject,
 	err error,
@@ -105,7 +108,7 @@ func (s *Service) Authenticate(accessTokenStr, refreshTokenStr string) (
 			return "", nil, ErrInvalidToken
 		}
 		var subject StoredSubject
-		subject, err = s.repo.Get(claims.ID, claims.LoginVersion)
+		subject, err = s.repo.Get(ctx, claims.ID, claims.LoginVersion)
 		if err != nil {
 			return "", nil, err
 		}
