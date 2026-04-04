@@ -23,6 +23,6 @@ func LogMiddleware(h http.Handler) http.Handler {
 		lw := loggedResposneWriter{w, http.StatusOK}
 		h.ServeHTTP(&lw, r)
 		elapsed := time.Since(t1)
-		reqlog.Printf(r, "status %d in %d ms", lw.httpStatus, elapsed.Microseconds())
+		reqlog.Printf(r, "status %d in %d μs", lw.httpStatus, elapsed.Microseconds())
 	})
 }
