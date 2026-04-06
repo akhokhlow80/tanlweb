@@ -1,6 +1,7 @@
 package main
 
 import (
+	"akhokhlow80/tanlweb/auth"
 	"akhokhlow80/tanlweb/db"
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
@@ -36,10 +37,18 @@ type nodeView struct {
 }
 
 func (app *app) newNodePage(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
+		return err
+	}
+
 	return app.tmpl.ExecuteTemplate(w, "nodes/page", nil)
 }
 
 func (app *app) putNode(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
+		return err
+	}
+
 	if err := r.ParseForm(); err != nil {
 		return ErrParseForm
 	}
@@ -92,7 +101,7 @@ func (app *app) putNode(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 
-		w.Header().Add("HX-Replace-Url", fmt.Sprintf("/admin/nodes/%s", dbNode.Uuid))
+		w.Header().Add("HX-Replace-Url", fmt.Sprintf("/nodes/%s", dbNode.Uuid))
 	} else {
 		dbNode, err = func() (sqlgen.Node, error) {
 			defer app.db.Unlock()
@@ -128,6 +137,10 @@ func (app *app) putNode(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (app *app) nodePage(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
+		return err
+	}
+
 	uuid := r.PathValue("uuid")
 	dbNode, err := func() (sqlgen.Node, error) {
 		defer app.db.RUnlock()
@@ -149,6 +162,10 @@ func (app *app) nodePage(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (app *app) nodesList(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
+		return err
+	}
+
 	dbNodes, err := func() ([]sqlgen.Node, error) {
 		defer app.db.RUnlock()
 		app.db.RLock()

@@ -1,21 +1,26 @@
 package main
 
 import (
+	"akhokhlow80/tanlweb/auth"
 	"akhokhlow80/tanlweb/db"
 	"akhokhlow80/tanlweb/sqlgen"
-	"akhokhlow80/tanlweb/tokens"
 	"akhokhlow80/tanlweb/web"
+	"context"
 	"database/sql"
 	"embed"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/google/uuid"
 	"github.com/pressly/goose/v3"
 )
 
@@ -23,16 +28,17 @@ type config struct {
 	HTTPBind             string `env:"HTTP_BIND,required"`
 	DBPath               string `env:"DB_PATH,required"`
 	AuthPrivateKey       string `env:"AUTH_PRIV_KEY,required"`
+	BaseURI              string `env:"BASE_URI,required"`
+	LoginTokenLifetime   int    `env:"LOGIN_TOKEN_LIFETIME_SECS,required"`
 	RefreshTokenLifetime int    `env:"REFRESH_TOKEN_LIFETIME_SECS,required"`
 	AccessTokenLifetime  int    `env:"ACCESS_TOKEN_LIFETIME_SECS,required"`
 }
 
 type app struct {
-	cfg           config
-	db            db.DB
-	tmpl          *template.Template
-	accessTokens  tokens.Service
-	refreshTokens tokens.Service
+	cfg  config
+	db   db.DB
+	tmpl *template.Template
+	auth *auth.Service
 }
 
 var (
@@ -60,6 +66,22 @@ func (app *app) initDB(dbPath string) error {
 	}
 
 	app.db.Queries = sqlgen.New(app.db.DB)
+
+	users, err := app.db.GetUsers(context.Background())
+	if err != nil {
+		return err
+	}
+	if len(users) == 0 {
+		user, err := app.db.AddUser(context.Background(), sqlgen.AddUserParams{
+			Uuid:        uuid.New().String(),
+			Description: "root",
+			Scopes:      auth.FullScope.String(),
+		})
+		if err != nil {
+			return fmt.Errorf("Error adding root user: %w", err)
+		}
+		log.Printf("Created root user %s with full scope", user.Uuid)
+	}
 
 	return nil
 }
@@ -90,21 +112,51 @@ func (app *app) initTmpl() error {
 	})
 }
 
-func (app *app) listen() error {
-	adminMux := http.NewServeMux()
-	app.registerNodeHandlers(adminMux)
-	app.registerUsersHandlers(adminMux)
+func (app *app) cmdListen() error {
+	securedMux := http.NewServeMux()
+	// TODO: enable caching for static files
+	securedMux.Handle("/static/", http.FileServer(http.FS(staticFiles)))
+	// TODO: disable caching for pages
+	app.registerNodeHandlers(securedMux)
+	app.registerUsersHandlers(securedMux)
 
 	mux := http.NewServeMux()
-	// TODO: enable cache for static files
-	mux.Handle("/static/", http.FileServer(http.FS(staticFiles)))
-	// TODO: disable cache for pages
-	mux.Handle("/admin/", http.StripPrefix("/admin",
-		// FIXME: log middleware prints stripped URL
-		web.LogMiddleware(adminMux),
-	))
+	app.registerAuthHandlers(mux)
+	mux.Handle("/", app.authenticationMiddleware(securedMux))
+
 	log.Printf("Binding to %s", app.cfg.HTTPBind)
-	return http.ListenAndServe(app.cfg.HTTPBind, mux)
+	return http.ListenAndServe(app.cfg.HTTPBind, web.LogMiddleware(mux))
+}
+
+func (app *app) cmdLoginToken(uuid string) error {
+	user, err := app.db.GetUser(context.Background(), uuid)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("User not found")
+		} else {
+			return err
+		}
+	}
+	token, err := app.auth.IssueLoginToken(context.Background(), user.Uuid)
+	if err != nil {
+		return err
+	}
+	log.Printf("Issued token for %s (scopes %s)", user.Uuid, user.Scopes)
+	fmt.Printf("%s/login/%s", app.cfg.BaseURI, token)
+	return nil
+}
+
+func (app *app) cmdRevokeRefreshTokens(uuid string) error {
+	err := app.auth.RevokeRefreshTokens(context.Background(), uuid)
+	if err != nil {
+		if errors.Is(err, auth.ErrSubjectNotFound) {
+			return fmt.Errorf("User not found")
+		} else {
+			return err
+		}
+	}
+	log.Printf("Revoked refresh tokens for user %s", uuid)
+	return nil
 }
 
 func main() {
@@ -133,8 +185,37 @@ func main() {
 	if len(authPrivateKey) < 128 {
 		log.Fatalf("Key lenght is not safe")
 	}
-	app.accessTokens = tokens.New(authPrivateKey, time.Second*time.Duration(app.cfg.AccessTokenLifetime))
-	app.accessTokens = tokens.New(authPrivateKey, time.Second*time.Duration(app.cfg.RefreshTokenLifetime))
+	app.auth = auth.NewService(
+		&subjectsRepo{&app.db},
+		auth.TokensConfig{
+			PrivateKey: authPrivateKey,
+			LifeTime:   time.Duration(app.cfg.LoginTokenLifetime) * time.Second,
+		},
+		auth.TokensConfig{
+			PrivateKey: authPrivateKey,
+			LifeTime:   time.Duration(app.cfg.RefreshTokenLifetime) * time.Second,
+		},
+		auth.TokensConfig{
+			PrivateKey: authPrivateKey,
+			LifeTime:   time.Duration(app.cfg.AccessTokenLifetime) * time.Second,
+		},
+	)
 
-	log.Fatal(app.listen())
+	if len(os.Args) == 1 {
+		log.Fatal(app.cmdListen())
+	} else if len(os.Args) == 3 && os.Args[1] == "login-token" {
+		if err := app.cmdLoginToken(os.Args[2]); err != nil {
+			log.Fatal(err)
+		}
+	} else if len(os.Args) == 3 && os.Args[1] == "revoke-refresh-tokens" {
+		if err := app.cmdRevokeRefreshTokens(os.Args[2]); err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		fmt.Fprintf(
+			os.Stderr,
+			"usage: %s [login-token <user UUID> | revoke-refresh-tokens <user UUID>]",
+			os.Args[0],
+		)
+	}
 }

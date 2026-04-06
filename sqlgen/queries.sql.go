@@ -53,7 +53,7 @@ INSERT INTO users (
     ?3,
     ?4,
     FALSE
-) RETURNING id, uuid, description, scopes, fee, paid_until, is_banned
+) RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
 `
 
 type AddUserParams struct {
@@ -79,6 +79,8 @@ func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) (User, error) 
 		&i.Fee,
 		&i.PaidUntil,
 		&i.IsBanned,
+		&i.LoginTokenVersion,
+		&i.RefreshTokenVersion,
 	)
 	return i, err
 }
@@ -87,7 +89,7 @@ const banUser = `-- name: BanUser :one
 UPDATE users SET
     is_banned = ?1
 WHERE uuid = ?2
-RETURNING id, uuid, description, scopes, fee, paid_until, is_banned
+RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
 `
 
 type BanUserParams struct {
@@ -106,6 +108,8 @@ func (q *Queries) BanUser(ctx context.Context, arg BanUserParams) (User, error) 
 		&i.Fee,
 		&i.PaidUntil,
 		&i.IsBanned,
+		&i.LoginTokenVersion,
+		&i.RefreshTokenVersion,
 	)
 	return i, err
 }
@@ -160,7 +164,7 @@ func (q *Queries) GetNodes(ctx context.Context) ([]Node, error) {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, uuid, description, scopes, fee, paid_until, is_banned FROM users
+SELECT id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version FROM users
 WHERE uuid = ?1
 `
 
@@ -175,12 +179,45 @@ func (q *Queries) GetUser(ctx context.Context, uuid string) (User, error) {
 		&i.Fee,
 		&i.PaidUntil,
 		&i.IsBanned,
+		&i.LoginTokenVersion,
+		&i.RefreshTokenVersion,
+	)
+	return i, err
+}
+
+const getUserAndUpdateForLogin = `-- name: GetUserAndUpdateForLogin :one
+UPDATE users SET
+    login_token_version = login_token_version +1
+WHERE
+    uuid = ?1
+    AND login_token_version = ?2
+RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
+`
+
+type GetUserAndUpdateForLoginParams struct {
+	Uuid                string
+	CurrentLoginVersion int64
+}
+
+func (q *Queries) GetUserAndUpdateForLogin(ctx context.Context, arg GetUserAndUpdateForLoginParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserAndUpdateForLogin, arg.Uuid, arg.CurrentLoginVersion)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Description,
+		&i.Scopes,
+		&i.Fee,
+		&i.PaidUntil,
+		&i.IsBanned,
+		&i.LoginTokenVersion,
+		&i.RefreshTokenVersion,
 	)
 	return i, err
 }
 
 const getUsers = `-- name: GetUsers :many
-SELECT id, uuid, description, scopes, fee, paid_until, is_banned FROM users
+SELECT id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version FROM users
 `
 
 func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
@@ -200,6 +237,8 @@ func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 			&i.Fee,
 			&i.PaidUntil,
 			&i.IsBanned,
+			&i.LoginTokenVersion,
+			&i.RefreshTokenVersion,
 		); err != nil {
 			return nil, err
 		}
@@ -212,6 +251,56 @@ func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const incrementUserLoginVersion = `-- name: IncrementUserLoginVersion :one
+UPDATE users SET
+    login_token_version = login_token_version + 1
+WHERE
+    uuid = ?1
+RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
+`
+
+func (q *Queries) IncrementUserLoginVersion(ctx context.Context, uuid string) (User, error) {
+	row := q.db.QueryRowContext(ctx, incrementUserLoginVersion, uuid)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Description,
+		&i.Scopes,
+		&i.Fee,
+		&i.PaidUntil,
+		&i.IsBanned,
+		&i.LoginTokenVersion,
+		&i.RefreshTokenVersion,
+	)
+	return i, err
+}
+
+const incrementUserRefreshVersion = `-- name: IncrementUserRefreshVersion :one
+UPDATE users SET
+    refresh_token_version = refresh_token_version + 1
+WHERE
+    uuid = ?1
+RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
+`
+
+func (q *Queries) IncrementUserRefreshVersion(ctx context.Context, uuid string) (User, error) {
+	row := q.db.QueryRowContext(ctx, incrementUserRefreshVersion, uuid)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Description,
+		&i.Scopes,
+		&i.Fee,
+		&i.PaidUntil,
+		&i.IsBanned,
+		&i.LoginTokenVersion,
+		&i.RefreshTokenVersion,
+	)
+	return i, err
 }
 
 const removeNode = `-- name: RemoveNode :execrows
@@ -258,7 +347,7 @@ UPDATE users SET
     scopes = ?2,
     fee = ?3
 WHERE uuid = ?4
-RETURNING id, uuid, description, scopes, fee, paid_until, is_banned
+RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
 `
 
 type UpdateUserParams struct {
@@ -284,6 +373,8 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.Fee,
 		&i.PaidUntil,
 		&i.IsBanned,
+		&i.LoginTokenVersion,
+		&i.RefreshTokenVersion,
 	)
 	return i, err
 }
@@ -292,7 +383,7 @@ const updateUserPaidUntil = `-- name: UpdateUserPaidUntil :one
 UPDATE users SET
     paid_until = ?1
 WHERE uuid = ?2
-RETURNING id, uuid, description, scopes, fee, paid_until, is_banned
+RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
 `
 
 type UpdateUserPaidUntilParams struct {
@@ -311,6 +402,8 @@ func (q *Queries) UpdateUserPaidUntil(ctx context.Context, arg UpdateUserPaidUnt
 		&i.Fee,
 		&i.PaidUntil,
 		&i.IsBanned,
+		&i.LoginTokenVersion,
+		&i.RefreshTokenVersion,
 	)
 	return i, err
 }

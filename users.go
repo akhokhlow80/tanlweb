@@ -1,6 +1,7 @@
 package main
 
 import (
+	"akhokhlow80/tanlweb/auth"
 	"akhokhlow80/tanlweb/scopes"
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
@@ -53,6 +54,10 @@ func userViewFromDB(dbUser *sqlgen.User) userView {
 }
 
 func (app *app) newUserPage(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
+		return err
+	}
+
 	return app.tmpl.ExecuteTemplate(w, "users/page", nil)
 }
 
@@ -103,7 +108,7 @@ func (app *app) putUser(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 
-		w.Header().Add("HX-Replace-Url", fmt.Sprintf("/admin/users/%s", dbUser.Uuid))
+		w.Header().Add("HX-Replace-Url", fmt.Sprintf("/users/%s", dbUser.Uuid))
 	} else {
 		dbUser, err = func() (sqlgen.User, error) {
 			defer app.db.Unlock()
@@ -132,6 +137,10 @@ func (app *app) putUser(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (app *app) putUserPaidUntil(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
+		return err
+	}
+
 	if err := r.ParseForm(); err != nil {
 		return ErrParseForm
 	}
@@ -167,6 +176,10 @@ func (app *app) putUserPaidUntil(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (app *app) putUserBan(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
+		return err
+	}
+
 	if err := r.ParseForm(); err != nil {
 		return ErrParseForm
 	}
@@ -202,6 +215,10 @@ func (app *app) putUserBan(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (app *app) userPage(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
+		return err
+	}
+
 	uuid := r.PathValue("uuid")
 	dbUser, err := func() (sqlgen.User, error) {
 		defer app.db.RUnlock()
@@ -219,6 +236,10 @@ func (app *app) userPage(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (app *app) usersList(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
+		return err
+	}
+
 	dbUsers, err := func() ([]sqlgen.User, error) {
 		defer app.db.RUnlock()
 		app.db.RLock()

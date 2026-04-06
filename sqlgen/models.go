@@ -16,11 +16,13 @@ type Node struct {
 }
 
 type User struct {
-	ID          int64
-	Uuid        string
-	Description string
-	Scopes      string
-	Fee         string
-	PaidUntil   *time.Time
-	IsBanned    bool
+	ID                  int64
+	Uuid                string
+	Description         string
+	Scopes              string
+	Fee                 string
+	PaidUntil           *time.Time
+	IsBanned            bool
+	LoginTokenVersion   int64
+	RefreshTokenVersion int64
 }

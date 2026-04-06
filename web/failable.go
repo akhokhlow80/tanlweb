@@ -37,9 +37,11 @@ func (f *FailableResponseWriter) Fail() {
 	f.bytes = f.bytes[:0]
 }
 
+type FailableHandlerFunc func(w http.ResponseWriter, r *http.Request) error
+
 func FailableHandler(
 	errorHandler func(w http.ResponseWriter, r *http.Request, err error),
-	reqHandler func(w http.ResponseWriter, r *http.Request) error,
+	reqHandler FailableHandlerFunc,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fw := FailableResponseWriter{

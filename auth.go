@@ -1,109 +1,229 @@
 package main
 
 import (
-	"akhokhlow80/tanlweb/scopes"
+	"akhokhlow80/tanlweb/auth"
+	"akhokhlow80/tanlweb/db"
+	"akhokhlow80/tanlweb/reqlog"
 	"akhokhlow80/tanlweb/sqlgen"
-	"akhokhlow80/tanlweb/tokens"
+	"akhokhlow80/tanlweb/web"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
 )
 
-func (app *app) authenticateWithAccessToken(r *http.Request) (tokens.Subject, error) {
-	accessTokenCookie, err := r.Cookie("access_token")
-	if err != nil {
-		return tokens.Subject{}, ErrUnauthorized
-	}
-	sub, err := app.accessTokens.Parse(accessTokenCookie.Value)
-	if err != nil {
-		return tokens.Subject{}, ErrUnauthorized
-	}
-	return sub, err
+func (app *app) registerAuthHandlers(m *http.ServeMux) {
+	m.HandleFunc("/login/{token}", web.FailableHandler(app.StandardErrorHandler, app.loginHandler))
 }
 
-func (app *app) authenticateWithRefreshToken(w http.ResponseWriter, r *http.Request) (tokens.Subject, error) {
-	refreshTokenCookie, err := r.Cookie("refresh_token")
+func (app *app) loginHandler(w http.ResponseWriter, r *http.Request) error {
+	token := r.PathValue("token")
+	refreshToken, err := app.auth.LoginForRefreshToken(r.Context(), token)
 	if err != nil {
-		return tokens.Subject{}, ErrUnauthorized
-	}
-	sub, err := app.refreshTokens.Parse(refreshTokenCookie.Name)
-	if err != nil {
-		return tokens.Subject{}, ErrUnauthorized
-	}
-
-	// TODO: check token version
-
-	user, err := func() (sqlgen.User, error) {
-		defer app.db.Unlock()
-		app.db.Lock()
-		return app.db.Queries.GetUser(r.Context(), sub.Id)
-	}()
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return tokens.Subject{}, ErrUnauthorized
+		if errors.Is(err, auth.ErrInvalidToken) || errors.Is(err, auth.ErrSubjectNotFound) {
+			return ErrUnauthorized
 		} else {
-			return tokens.Subject{}, fmt.Errorf("Failed to retrieve user on auth: %w", err)
-		}
-	}
-	realScopes, err := scopes.Parse(user.Scopes)
-	if err != nil {
-		return tokens.Subject{}, fmt.Errorf("Failed to parse scopes on auth: %w", err)
-	}
-
-	accessToken, err := app.accessTokens.SignToken(&tokens.Subject{
-		Id: sub.Id,
-		Scopes: realScopes,
-	})
-	if err != nil {
-		return tokens.Subject{}, fmt.Errorf("Failed to sign token: %w", err)
-	}
-	accessTokenCookie := http.Cookie{
-		Name:     "access_token",
-		Value:    accessToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-	}
-	http.SetCookie(w, &accessTokenCookie)
-
-	return sub, nil
-}
-
-// May only return ErrUnauthorized or ErrDenied.
-// Any other internal errors are logged.
-func (app *app) authorize(w http.ResponseWriter, r *http.Request, requiredScopes scopes.Scopes) error {
-	var (
-		sub tokens.Subject
-		err error
-	)
-	sub, err = app.authenticateWithAccessToken(r)
-	if err != nil {
-		sub, err = app.authenticateWithRefreshToken(w, r)
-		if err != nil {
 			return err
 		}
 	}
-	if !sub.Scopes.MatchRequired(&requiredScopes) {
-		return err
-	}
-	return nil
-}
-
-func (app *app) setRefreshTokenCookie(w http.ResponseWriter, sub *tokens.Subject) error {
-	refreshToken, err := app.accessTokens.SignToken(sub)
-	if err != nil {
-		return err
-	}
-	refreshTokenCookie := http.Cookie{
+	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-	}
-	http.SetCookie(w, &refreshTokenCookie)
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+	w.Header().Set("Location", fmt.Sprintf("%s/", app.cfg.BaseURI))
+	w.WriteHeader(http.StatusSeeOther)
 	return nil
+}
+
+type subjectsRepo struct {
+	db *db.DB
+}
+
+var _ auth.SubjectsRepo = (*subjectsRepo)(nil)
+
+// Get implements auth.SubjectsRepo.
+func (repo *subjectsRepo) Get(ctx context.Context, subID string) (auth.StoredSubject, error) {
+	defer repo.db.RUnlock()
+	repo.db.RLock()
+
+	user, err := repo.db.GetUser(ctx, subID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return auth.StoredSubject{}, auth.ErrSubjectNotFound
+		} else {
+			return auth.StoredSubject{}, err
+		}
+	}
+	scopes, err := auth.ParseScopes(user.Scopes)
+	if err != nil {
+		return auth.StoredSubject{},
+			fmt.Errorf("Error while parsing scopes of user %s from DB: %w", user.Uuid, err)
+	}
+	return auth.StoredSubject{
+		ID:                  subID,
+		Scopes:              scopes,
+		LoginTokenVersion:   int(user.LoginTokenVersion),
+		RefreshTokenVersion: int(user.RefreshTokenVersion),
+	}, err
+}
+
+// IncrementLoginVersion implements auth.SubjectsRepo.
+func (repo *subjectsRepo) IncrementLoginVersion(ctx context.Context, subID string) (auth.StoredSubject, error) {
+	defer repo.db.Unlock()
+	repo.db.Lock()
+
+	user, err := repo.db.IncrementUserLoginVersion(ctx, subID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return auth.StoredSubject{}, auth.ErrSubjectNotFound
+		} else {
+			return auth.StoredSubject{}, err
+		}
+	}
+	scopes, err := auth.ParseScopes(user.Scopes)
+	if err != nil {
+		return auth.StoredSubject{},
+			fmt.Errorf("Error while parsing scopes of user %s from DB: %w", user.Uuid, err)
+	}
+	return auth.StoredSubject{
+		ID:                  subID,
+		Scopes:              scopes,
+		LoginTokenVersion:   int(user.LoginTokenVersion),
+		RefreshTokenVersion: int(user.RefreshTokenVersion),
+	}, err
+}
+
+// IncrementRefreshVersion implements auth.SubjectsRepo.
+func (repo *subjectsRepo) IncrementRefreshVersion(ctx context.Context, subID string) (auth.StoredSubject, error) {
+	defer repo.db.Unlock()
+	repo.db.Lock()
+
+	user, err := repo.db.IncrementUserRefreshVersion(ctx, subID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return auth.StoredSubject{}, auth.ErrSubjectNotFound
+		} else {
+			return auth.StoredSubject{}, err
+		}
+	}
+	scopes, err := auth.ParseScopes(user.Scopes)
+	if err != nil {
+		return auth.StoredSubject{},
+			fmt.Errorf("Error while parsing scopes of user %s from DB: %w", user.Uuid, err)
+	}
+	return auth.StoredSubject{
+		ID:                  subID,
+		Scopes:              scopes,
+		LoginTokenVersion:   int(user.LoginTokenVersion),
+		RefreshTokenVersion: int(user.RefreshTokenVersion),
+	}, err
+}
+
+// GetAndUpdateForLogin implements auth.SubjectsRepo.
+func (repo *subjectsRepo) GetAndUpdateForLogin(ctx context.Context, subID string, currentLoginVersion int) (auth.StoredSubject, error) {
+	defer repo.db.Unlock()
+	repo.db.Lock()
+
+	user, err := repo.db.GetUserAndUpdateForLogin(ctx, sqlgen.GetUserAndUpdateForLoginParams{
+		Uuid:                subID,
+		CurrentLoginVersion: int64(currentLoginVersion),
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return auth.StoredSubject{}, auth.ErrSubjectNotFound
+		} else {
+			return auth.StoredSubject{}, err
+		}
+	}
+	scopes, err := auth.ParseScopes(user.Scopes)
+	if err != nil {
+		return auth.StoredSubject{},
+			fmt.Errorf("Error while parsing scopes of user %s from DB: %w", user.Uuid, err)
+	}
+	return auth.StoredSubject{
+		ID:                  subID,
+		Scopes:              scopes,
+		LoginTokenVersion:   int(user.LoginTokenVersion),
+		RefreshTokenVersion: int(user.RefreshTokenVersion),
+	}, err
+}
+
+func (app *app) authenticate(w http.ResponseWriter, r *http.Request) (auth.Subject, error) {
+	accessTokenCookie, err := r.Cookie("access_token")
+	if err != nil {
+		return auth.Subject{}, ErrUnauthorized
+	}
+	refreshTokenCookie, err := r.Cookie("refresh_token")
+	if err != nil {
+		return auth.Subject{}, ErrUnauthorized
+	}
+	newAccessToken, sub, err := app.auth.Authenticate(r.Context(), accessTokenCookie.Value, refreshTokenCookie.Value)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidToken) || errors.Is(err, auth.ErrSubjectNotFound) {
+			return auth.Subject{}, ErrUnauthorized
+		} else {
+			return auth.Subject{}, err
+		}
+	}
+	if len(newAccessToken) != 0 {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "access_token",
+			Value:    newAccessToken,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+	}
+	return *sub, nil
+}
+
+type authenticatedUserCtxKey struct{}
+
+func (app *app) authenticationMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sub, err := app.authenticate(w, r)
+		if err != nil {
+			if errors.Is(err, ErrUnauthorized) {
+				http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
+				return
+			} else {
+				reqlog.Printf(r, "Internal server error during authentication: %s", err)
+				http.Error(w, "500 Internal server error", http.StatusInternalServerError)
+				return
+			}
+		}
+		ctx := context.WithValue(r.Context(), authenticatedUserCtxKey{}, sub)
+		h.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// Authorize authenticated user
+// Returns ErrForbidden on insufficient scope.
+func authorize(ctx context.Context, requiredScopes *auth.Scopes) error {
+	subject, ok := ctx.Value(authenticatedUserCtxKey{}).(auth.Subject)
+	if !ok {
+		return ErrUnauthorized
+	}
+
+	fmt.Printf("%v\n", subject)
+
+	if !subject.Scopes.MatchRequired(requiredScopes) {
+		return ErrForbidden
+	} else {
+		return nil
+	}
 }

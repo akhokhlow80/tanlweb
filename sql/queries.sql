@@ -67,3 +67,25 @@ UPDATE users SET
     paid_until = @paid_until
 WHERE uuid = @uuid
 RETURNING *;
+
+-- name: IncrementUserLoginVersion :one
+UPDATE users SET
+    login_token_version = login_token_version + 1
+WHERE
+    uuid = @uuid
+RETURNING *;
+
+-- name: IncrementUserRefreshVersion :one
+UPDATE users SET
+    refresh_token_version = refresh_token_version + 1
+WHERE
+    uuid = @uuid
+RETURNING *;
+
+-- name: GetUserAndUpdateForLogin :one
+UPDATE users SET
+    login_token_version = login_token_version +1
+WHERE
+    uuid = @uuid
+    AND login_token_version = @current_login_version
+RETURNING *;
