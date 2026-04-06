@@ -11,7 +11,7 @@ document.addEventListener("htmx:sendError", function(evt) {
 })
 
 document.addEventListener("htmx:responseError", function(evt) {
-  pushNotification("Server responded with error")
+  pushNotification("Error: " + evt.detail.xhr.status + " " + evt.detail.xhr.statusText)
 })
 
 function timestampToISO(timestamp) {
