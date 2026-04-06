@@ -214,7 +214,7 @@ func main() {
 	} else {
 		fmt.Fprintf(
 			os.Stderr,
-			"usage: %s [login-token <user UUID> | revoke-refresh-tokens <user UUID>]",
+			"usage: %s [login-token <user UUID> | revoke-refresh-tokens <user UUID>]\n",
 			os.Args[0],
 		)
 	}
