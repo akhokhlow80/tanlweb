@@ -31,8 +31,8 @@ func (t tokenType) String() string {
 type tokenClaims struct {
 	Subject
 	// Optional, zero is none
-	LoginVersion int
-	Type         tokenType
+	Version int
+	Type    tokenType
 }
 
 type TokensConfig struct {
@@ -48,9 +48,7 @@ func signToken(cfg *TokensConfig, claims *tokenClaims) (string, error) {
 		"scopes": claims.Scopes.String(),
 		"exp":    exp.Unix(),
 		"type":   claims.Type.String(),
-	}
-	if claims.LoginVersion != 0 {
-		jwtClaims["jti"] = claims.LoginVersion
+		"jti":    claims.Version,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS384, jwtClaims)
@@ -94,7 +92,7 @@ func parseToken(cfg *TokensConfig, expectedType tokenType, tokenStr string) (tok
 	}
 	version, ok := claims["jti"].(float64)
 	if !ok {
-		version = 0
+		return tokenClaims{}, err
 	}
 
 	return tokenClaims{
@@ -102,6 +100,6 @@ func parseToken(cfg *TokensConfig, expectedType tokenType, tokenStr string) (tok
 			ID:     sub,
 			Scopes: scopes,
 		},
-		LoginVersion: int(version),
+		Version: int(version),
 	}, nil
 }

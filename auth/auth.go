@@ -12,10 +12,10 @@ type Subject struct {
 
 // Subject from the storage.
 type StoredSubject struct {
-	ID                string
-	Scopes            Scopes
-	LoginTokenVersion int // Always >= 0
-	LoginTokenUsed    bool
+	ID                  string
+	Scopes              Scopes
+	LoginTokenVersion   int
+	RefreshTokenVersion int
 }
 
 var ErrSubjectNotFound = errors.New("Subject not found")
@@ -23,15 +23,23 @@ var ErrInvalidToken = errors.New("Invalid token")
 
 type SubjectsRepo interface {
 	// Returns ErrSubjectNotFound if no such subject was found.
-	Get(ctx context.Context, subID string, loginVersion int) (StoredSubject, error)
+	Get(ctx context.Context, subID string) (StoredSubject, error)
 
-	// Returns updated stored subject.
+	// Returns updated subject.
 	// Errors: ErrSubjectNotFound, ...
-	NextLoginVersion(ctx context.Context, subID string) (StoredSubject, error)
+	IncrementLoginVersion(ctx context.Context, subID string) (StoredSubject, error)
 
-	// Updates only if the subject exists, version matches and they weren't logged in,
-	// otherwise ErrSubjectNotFound is returned.
-	LoggedIn(ctx context.Context, subID string, loginVersion int) (StoredSubject, error)
+	// Returns updated subject.
+	// Errors: ErrSubjectNotFound, ...
+	IncrementRefreshVersion(ctx context.Context, subID string) (StoredSubject, error)
+
+	// If the login version matches, increments it and returns updated subject.
+	// Otherwise ErrSubjectNotFound is returned.
+	GetAndUpdateForLogin(
+		ctx context.Context,
+		subID string,
+		currentLoginVersion int,
+	) (StoredSubject, error)
 }
 
 type Service struct {
@@ -58,7 +66,7 @@ func NewService(repo SubjectsRepo, loginTokenCfg, refreshTokenCfg, accessTokenCf
 }
 
 func (s *Service) IssueLoginToken(ctx context.Context, subID string) (string, error) {
-	storedSub, err := s.repo.NextLoginVersion(ctx, subID)
+	storedSub, err := s.repo.IncrementLoginVersion(ctx, subID)
 	if err != nil {
 		return "", err
 	}
@@ -67,9 +75,19 @@ func (s *Service) IssueLoginToken(ctx context.Context, subID string) (string, er
 			storedSub.ID,
 			storedSub.Scopes,
 		},
-		LoginVersion: storedSub.LoginTokenVersion,
-		Type:         tokenLogin,
+		Version: storedSub.LoginTokenVersion,
+		Type:    tokenLogin,
 	})
+}
+
+// Revoke all previously issued refresh tokens.
+// Errors: ErrSubjectNotFound, ...
+func (s *Service) RevokeRefreshTokens(ctx context.Context, subID string) error {
+	_, err := s.repo.IncrementRefreshVersion(ctx, subID)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Errors: ErrSubjectNotFound, ErrInvalidToken, ...
@@ -78,7 +96,7 @@ func (s *Service) LoginForRefreshToken(ctx context.Context, loginTokenStr string
 	if err != nil {
 		return "", ErrInvalidToken
 	}
-	subject, err := s.repo.LoggedIn(ctx, parsedClaims.ID, parsedClaims.LoginVersion)
+	subject, err := s.repo.GetAndUpdateForLogin(ctx, parsedClaims.ID, parsedClaims.Version)
 	if err != nil {
 		return "", err
 	}
@@ -87,8 +105,8 @@ func (s *Service) LoginForRefreshToken(ctx context.Context, loginTokenStr string
 			subject.ID,
 			subject.Scopes,
 		},
-		LoginVersion: subject.LoginTokenVersion,
-		Type:         tokenRefresh,
+		Version: subject.RefreshTokenVersion,
+		Type:    tokenRefresh,
 	})
 }
 
@@ -101,24 +119,27 @@ func (s *Service) Authenticate(ctx context.Context, accessTokenStr, refreshToken
 	sub *Subject,
 	err error,
 ) {
-	claims, err := parseToken(&s.accessCfg, tokenAccess, accessTokenStr)
+	parsedClaims, err := parseToken(&s.accessCfg, tokenAccess, accessTokenStr)
 	if err != nil {
-		claims, err = parseToken(&s.refreshCfg, tokenRefresh, refreshTokenStr)
+		parsedClaims, err = parseToken(&s.refreshCfg, tokenRefresh, refreshTokenStr)
 		if err != nil {
 			return "", nil, ErrInvalidToken
 		}
 		var subject StoredSubject
-		subject, err = s.repo.Get(ctx, claims.ID, claims.LoginVersion)
+		subject, err = s.repo.Get(ctx, parsedClaims.ID)
 		if err != nil {
 			return "", nil, err
+		}
+		if subject.RefreshTokenVersion != parsedClaims.Version {
+			return "", nil, ErrInvalidToken
 		}
 		newAccessClaims := tokenClaims{
 			Subject: Subject{
 				subject.ID,
 				subject.Scopes,
 			},
-			LoginVersion: 0,
-			Type:         tokenAccess,
+			Version: subject.RefreshTokenVersion,
+			Type:    tokenAccess,
 		}
 		newAccessToken, err = signToken(&s.accessCfg, &newAccessClaims)
 		if err != nil {
@@ -126,7 +147,7 @@ func (s *Service) Authenticate(ctx context.Context, accessTokenStr, refreshToken
 		}
 		sub = &newAccessClaims.Subject
 	} else {
-		sub = &claims.Subject
+		sub = &parsedClaims.Subject
 	}
 
 	return newAccessToken, sub, nil
