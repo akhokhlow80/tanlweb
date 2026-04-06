@@ -9,9 +9,9 @@
     id="user-config-form"
     hx-swap="none"
     {{if .UUID}}
-      hx-put="/admin/users/{{.UUID}}"
+      hx-put="{{BaseURI}}/users/{{.UUID}}"
     {{else}}
-      hx-post="/admin/users"
+      hx-post="{{BaseURI}}/users"
     {{end}}
     hx-disabled-elt="find input[type='submit']"
   >
@@ -64,7 +64,7 @@
     <form
       id="user-paid-until-form"
       hx-swap="none"
-      hx-put="/admin/users/{{.UUID}}/paid-until"
+      hx-put="{{BaseURI}}/users/{{.UUID}}/paid-until"
       hx-disabled-elt="find input[type='submit']"
     >
       <div id="user-paid-until-container" class="field">
@@ -92,7 +92,7 @@
     <form
       id="user-status-form"
       hx-swap="none"
-      hx-put="/admin/users/{{.UUID}}/ban"
+      hx-put="{{BaseURI}}/users/{{.UUID}}/ban"
       hx-disabled-elt="find input[type='submit']"
     >
       <div id="user-status-container" class="field">

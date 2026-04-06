@@ -16,14 +16,14 @@
       <tbody>
         {{range .}}
           <tr>
-            <td><a href="/admin/users/{{.UUID}}">{{slice .UUID 24}}</a></td>
+            <td><a href="{{BaseURI}}/users/{{.UUID}}">{{slice .UUID 24}}</a></td>
             <td>{{.Description}}</td>
             <td>{{.Fee}}</td>
           </tr>
         {{end}}
       </tbody>
     </table>
-    <form action="/admin/users/new" method="get">
+    <form action="{{BaseURI}}/users/new" method="get">
       <input type="submit" class="add-new" value="+ Add new" />
     </form>
   </body>

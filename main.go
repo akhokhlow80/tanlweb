@@ -87,7 +87,11 @@ func (app *app) initDB(dbPath string) error {
 }
 
 func (app *app) initTmpl() error {
-	templateFuncs := map[string]any{}
+	templateFuncs := map[string]any{
+		"BaseURI": func() string {
+			return app.cfg.BaseURI
+		},
+	}
 	app.tmpl = template.New("").Funcs(templateFuncs)
 	htmlFS, err := fs.Sub(htmlTemplates, "html")
 	if err != nil {

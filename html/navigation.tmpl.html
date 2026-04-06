@@ -1,18 +1,18 @@
 <div id="navigation">
   <a
-    href="/admin/peers"
+    href="{{BaseURI}}/peers"
     {{if eq . `peers`}}
       class="current"
     {{end}}
     >Peers</a>
   <a
-    href="/admin/users"
+    href="{{BaseURI}}/users"
     {{if eq . `users`}}
       class="current"
     {{end}}
     >Users</a>
   <a
-    href="/admin/nodes"
+    href="{{BaseURI}}/nodes"
     {{if eq . `nodes`}}
       class="current"
     {{end}}
