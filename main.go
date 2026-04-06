@@ -123,6 +123,7 @@ func (app *app) cmdListen() error {
 	// TODO: disable caching for pages
 	app.registerNodeHandlers(securedMux)
 	app.registerUsersHandlers(securedMux)
+	app.registerIndexPage(securedMux)
 
 	mux := http.NewServeMux()
 	app.registerAuthHandlers(mux)
