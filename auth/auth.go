@@ -112,19 +112,22 @@ func (s *Service) Authenticate(ctx context.Context, accessTokenStr, refreshToken
 		if err != nil {
 			return "", nil, err
 		}
-		newAccessToken, err = signToken(&s.accessCfg, &tokenClaims{
+		newAccessClaims := tokenClaims{
 			Subject: Subject{
 				subject.ID,
 				subject.Scopes,
 			},
 			LoginVersion: 0,
 			Type:         tokenAccess,
-		})
+		}
+		newAccessToken, err = signToken(&s.accessCfg, &newAccessClaims)
 		if err != nil {
 			return "", nil, err
 		}
+		sub = &newAccessClaims.Subject
+	} else {
+		sub = &claims.Subject
 	}
 
-	sub = &claims.Subject
 	return newAccessToken, sub, nil
 }

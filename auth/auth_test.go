@@ -25,7 +25,7 @@ var (
 )
 
 type mockSubjectsRepo struct {
-	subjects [2]auth.StoredSubject
+	subjects []*auth.StoredSubject
 }
 
 var _ auth.SubjectsRepo = (*mockSubjectsRepo)(nil)
@@ -33,7 +33,7 @@ var _ auth.SubjectsRepo = (*mockSubjectsRepo)(nil)
 func (repo *mockSubjectsRepo) Get(ctx context.Context, subID string, loginVersion int) (auth.StoredSubject, error) {
 	for _, subject := range repo.subjects {
 		if subject.ID == subID && subject.LoginTokenVersion == loginVersion {
-			return subject, nil
+			return *subject, nil
 		}
 	}
 	return auth.StoredSubject{}, auth.ErrSubjectNotFound
@@ -45,7 +45,7 @@ func (repo *mockSubjectsRepo) NextLoginVersion(ctx context.Context, subID string
 			subject.LoginTokenVersion++
 			subject.LoginTokenUsed = false
 			repo.subjects[i] = subject
-			return subject, nil
+			return *subject, nil
 		}
 	}
 	return auth.StoredSubject{}, auth.ErrSubjectNotFound
@@ -56,7 +56,7 @@ func (repo *mockSubjectsRepo) LoggedIn(ctx context.Context, subID string, loginV
 		if subject.ID == subID && subject.LoginTokenVersion == loginVersion && !subject.LoginTokenUsed {
 			subject.LoginTokenUsed = true
 			repo.subjects[i] = subject
-			return subject, nil
+			return *subject, nil
 		}
 	}
 	return auth.StoredSubject{}, auth.ErrSubjectNotFound
@@ -71,8 +71,7 @@ func newSerivce(
 	accessKey []byte,
 ) *auth.Service {
 	var repo mockSubjectsRepo
-	repo.subjects[0] = user0
-	repo.subjects[1] = user1
+	repo.subjects = []*auth.StoredSubject{&user0, &user1}
 
 	return auth.NewService(&repo,
 		auth.TokensConfig{
@@ -303,5 +302,36 @@ func TestTokenTypeCheck(t *testing.T) {
 	_, err = service.LoginForRefreshToken(context.Background(), refreshToken)
 	if !errors.Is(err, auth.ErrInvalidToken) {
 		t.Errorf("Expected ErrInvalidToken, got: %s", err)
+	}
+}
+
+func TestAccessTokenSubjectAfterRenewal(t *testing.T) {
+	service := newSerivceWithRandomKeys(time.Hour, time.Hour, time.Second)
+	loginToken, err := service.IssueLoginToken(context.Background(), "user0")
+	if err != nil {
+		t.Errorf("Expected no error, got: %s", err)
+	}
+	refreshToken, err := service.LoginForRefreshToken(context.Background(), loginToken)
+	if err != nil {
+		t.Errorf("Expected no error, got: %s", err)
+	}
+	accessToken, sub, err := service.Authenticate(context.Background(), "", refreshToken)
+	if err != nil {
+		t.Errorf("Expected no error, got: %s", err)
+	}
+
+	time.Sleep(2 * time.Second)
+
+	user0.Scopes.Nodes = true
+	var user0Sub = auth.Subject{
+		ID:     user0.ID,
+		Scopes: user0.Scopes,
+	}
+	_, sub, err = service.Authenticate(context.Background(), accessToken, refreshToken)
+	if err != nil {
+		t.Errorf("Expected no error, got: %s", err)
+	}
+	if sub == nil || *sub != user0Sub {
+		t.Errorf("Subject %v differs from expected %v", sub, user0Sub)
 	}
 }
