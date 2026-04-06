@@ -101,7 +101,7 @@ func (app *app) putNode(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 
-		w.Header().Add("HX-Replace-Url", fmt.Sprintf("/nodes/%s", dbNode.Uuid))
+		w.Header().Add("HX-Replace-Url", fmt.Sprintf("%s/nodes/%s", app.cfg.BaseURI, dbNode.Uuid))
 	} else {
 		dbNode, err = func() (sqlgen.Node, error) {
 			defer app.db.Unlock()

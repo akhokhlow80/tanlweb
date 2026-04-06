@@ -108,7 +108,7 @@ func (app *app) putUser(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 
-		w.Header().Add("HX-Replace-Url", fmt.Sprintf("/users/%s", dbUser.Uuid))
+		w.Header().Add("HX-Replace-Url", fmt.Sprintf("%s/users/%s", app.cfg.BaseURI, dbUser.Uuid))
 	} else {
 		dbUser, err = func() (sqlgen.User, error) {
 			defer app.db.Unlock()
