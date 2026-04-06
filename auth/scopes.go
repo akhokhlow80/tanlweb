@@ -11,6 +11,12 @@ type Scopes struct {
 	Peers bool
 }
 
+var FullScope = Scopes{
+	Users: true,
+	Nodes: true,
+	Peers: true,
+}
+
 func ParseScopes(scopesStr string) (Scopes, error) {
 	var parsed Scopes
 	if len(scopesStr) == 0 {
