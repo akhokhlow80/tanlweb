@@ -227,38 +227,6 @@ func (cache *Cache) PutNode(node Node) {
 	}
 }
 
-// Errors: UpdateError
-func (cache *Cache) GetNodes(ctx context.Context) ([]*Node, error) {
-	defer cache.RUnlock()
-	cache.RLock()
-	err := cache.updatePeers(ctx, false)
-	if err != nil {
-		return nil, err
-	}
-	nodes := make([]*Node, 0, len(cache.nodes))
-	for _, node := range cache.nodes {
-		nodes = append(nodes, &node.node)
-	}
-	return nodes, nil
-}
-
-var ErrNodeNotFound = errors.New("Node not found")
-
-// Errors: UpdateError, ErrNodeNotFound
-func (cache *Cache) GetNode(ctx context.Context, uuid string) (*Node, error) {
-	defer cache.RUnlock()
-	cache.RLock()
-	if err := cache.updatePeers(ctx, false); err != nil {
-		return nil, err
-	}
-	node, ok := cache.nodes[uuid]
-	if !ok {
-		return nil, ErrNodeNotFound
-	} else {
-		return &node.node, nil
-	}
-}
-
 // Returns false iff no such node exists.
 func (cache *Cache) PutPeer(peer Peer, nodeUUID string) bool {
 	node := cache.nodes[nodeUUID]
@@ -297,6 +265,8 @@ func sortPeers(peers []Peer) {
 		return strings.Compare(peers[i].PublicKeyBase64, peers[j].PublicKeyBase64) < 0
 	})
 }
+
+var ErrNodeNotFound = errors.New("Node not found")
 
 // Errors: ErrNodeNotFound, UpdateError
 func (cache *Cache) GetNodePeers(ctx context.Context, nodeUUID string) ([]Peer, error) {
