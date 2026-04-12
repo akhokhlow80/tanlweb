@@ -27,22 +27,26 @@ func (app *app) loginHandler(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	http.SetCookie(w, &http.Cookie{
+	refreshCookie := http.Cookie{
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-	})
-	http.SetCookie(w, &http.Cookie{
+	}
+	accessCookie := http.Cookie{
 		Name:     "access_token",
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-	})
+	}
+	if !app.cfg.DebugMode {
+		refreshCookie.Secure = true
+		accessCookie.Secure = true
+	}
+	http.SetCookie(w, &refreshCookie)
+	http.SetCookie(w, &accessCookie)
 	w.Header().Set("Location", fmt.Sprintf("%s/", app.cfg.BaseURI))
 	w.WriteHeader(http.StatusSeeOther)
 	return nil

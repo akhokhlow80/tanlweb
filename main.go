@@ -32,6 +32,7 @@ type config struct {
 	LoginTokenLifetime   int    `env:"LOGIN_TOKEN_LIFETIME_SECS,required"`
 	RefreshTokenLifetime int    `env:"REFRESH_TOKEN_LIFETIME_SECS,required"`
 	AccessTokenLifetime  int    `env:"ACCESS_TOKEN_LIFETIME_SECS,required"`
+	DebugMode            bool   `env:"DEBUG_MODE"`
 }
 
 type app struct {
