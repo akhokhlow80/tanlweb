@@ -14,18 +14,44 @@ document.addEventListener("htmx:responseError", function(evt) {
   pushNotification("Error: " + evt.detail.xhr.status + " " + evt.detail.xhr.statusText)
 })
 
-function timestampToISO(timestamp) {
-  return new Date(timestamp*1000).toLocaleDateString('en-CA')
+function timestampFormatter(timestamp, format) {
+  console.log(timestamp, format)
+  const date = new Date(timestamp*1000)
+  const locale = "en-GB"
+  const useAgo = new Date() - date <= 30*24*60*1000
+  switch (format) {
+  case "local-datetime":
+    return date.toLocaleDateString(locale) + " " + date.toLocaleTimeString(locale)
+  case "local-datetime-with-ago":
+    let formatted = ' ' + date.toLocaleDateString(locale) + " " + date.toLocaleTimeString(locale)
+    if (useAgo)
+      formatted += " (" + timeago.format(date, 'en_short') + ")"
+    return formatted
+  case "ago":
+    if (useAgo, 'en_short')
+      return timeago.format(date)
+    else
+      return date.toLocaleDateString(locale) + " " + date.toLocaleTimeString(locale)
+  default:
+    console.error("Invalid timestamp format '" + format + "'")
+  }
 }
 
 function convertTimeStamps() {
-    document.querySelectorAll("input[data-unix-timestamp]").forEach((input) => {
-    input.value = timestampToISO(Number(input.getAttribute("data-unix-timestamp")))
+  document.querySelectorAll("input[timestamp]").forEach((el) => {
+    el.textContent = timestampFormatter(
+      Number(el.getAttribute("timestamp")),
+      el.getAttribute("timestamp-format")
+    )
   })
-  document.querySelectorAll(":not(input)[data-unix-timestamp]").forEach((el) => {
-    el.textContent = timestampToISO(Number(el.getAttribute("data-unix-timestamp")))
+  document.querySelectorAll(":not(input)[timestamp]").forEach((el) => {
+    el.textContent = timestampFormatter(
+      Number(el.getAttribute("timestamp")),
+      el.getAttribute("timestamp-format")
+    )
   })
 }
 
 document.addEventListener("htmx:afterSettle", function(evt) { convertTimeStamps() })
 document.addEventListener("DOMContentLoaded", function(evt) { convertTimeStamps() })
+setInterval(convertTimeStamps, 20 * 1000)
