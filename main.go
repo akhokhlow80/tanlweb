@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -148,7 +149,7 @@ func (app *app) cmdLoginToken(uuid string) error {
 		return err
 	}
 	log.Printf("Issued token for %s (scopes %s)", user.Uuid, user.Scopes)
-	fmt.Printf("%s/login/%s", app.cfg.BaseURI, token)
+	fmt.Printf("%s/login/%s", app.cfg.BaseURI, url.PathEscape(token))
 	return nil
 }
 
