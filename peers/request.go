@@ -1,7 +1,6 @@
 package peers
 
 import (
-	"akhokhlow80/tanlweb/peerconfig"
 	"context"
 	"errors"
 	"time"
@@ -25,19 +24,23 @@ type CreatePeerRequest struct {
 		AddedAt         time.Time
 		AddedByUserUUID string
 	}
-	Node  NodeUUID
-	Owner UserUUID
+	Node      string
+	OwnerUUID string
 }
 
-var ErrCreatePeerRequestNotFound = errors.New("Create peer request was not found")
+var ErrPeerRequestNotFound = errors.New("Create peer request was not found")
 
-type RequestStorage interface {
+type RequestUpdater interface {
 	// Errors: ErrCreatePeerRequestNotFound
-	Update(
+	Do(
 		ctx context.Context,
 		reqUUID string,
 		updateFn func(ctx context.Context, req *CreatePeerRequest) error,
 	) error
+}
+
+type CreatePeerNodeClient interface {
+	Do(ctx context.Context, owner string) (WGQuickConf, Peer, error)
 }
 
 var ErrRequestCompleted = errors.New("Request is either successfuly completed or cancelled")
@@ -45,10 +48,10 @@ var ErrRequestCompleted = errors.New("Request is either successfuly completed or
 // Errors: ErrRequestCompleted
 func (req *CreatePeerRequest) Complete(
 	ctx context.Context,
-	storage RequestStorage,
-	nodeClient NodeClient,
-) (peerconfig.WGQuick, Peer, error) {
-	err := storage.Update(ctx, req.UUID, func(ctx context.Context, updReq *CreatePeerRequest) error {
+	updateReq RequestUpdater,
+	createPeer CreatePeerNodeClient,
+) (WGQuickConf, Peer, error) {
+	err := updateReq.Do(ctx, req.UUID, func(ctx context.Context, updReq *CreatePeerRequest) error {
 		if updReq.Status != Pending {
 			return ErrRequestCompleted
 		}
@@ -59,21 +62,21 @@ func (req *CreatePeerRequest) Complete(
 		return nil
 	})
 	if err != nil {
-		return peerconfig.WGQuick{}, Peer{}, err
+		return WGQuickConf{}, Peer{}, err
 	}
 
-	config, peer, err := nodeClient.CreatePeer(ctx, req.Owner)
+	config, peer, err := createPeer.Do(ctx, req.OwnerUUID)
 	if err != nil {
-		return peerconfig.WGQuick{}, Peer{}, err
+		return WGQuickConf{}, Peer{}, err
 	}
 
-	err = storage.Update(ctx, req.UUID, func(ctx context.Context, updReq *CreatePeerRequest) error {
+	err = updateReq.Do(ctx, req.UUID, func(ctx context.Context, updReq *CreatePeerRequest) error {
 		updReq.Status = Created
 		*req = *updReq
 		return nil
 	})
 	if err != nil {
-		return peerconfig.WGQuick{}, Peer{}, err
+		return WGQuickConf{}, Peer{}, err
 	}
 
 	// XXX: The situation in which client succedes to create a peer on the remote node, but the local DB

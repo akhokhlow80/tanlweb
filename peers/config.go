@@ -1,11 +1,11 @@
-package peerconfig
+package peers
 
 import (
 	"fmt"
 	"strings"
 )
 
-type WGQuick struct {
+type WGQuickConf struct {
 	Interface struct {
 		// set to a newly generated one only if no public key was provided in the request
 		PrivateKey string `json:"private_key"`
@@ -26,7 +26,7 @@ type WGQuick struct {
 	} `json:"node_peer"`
 }
 
-func (conf *WGQuick) String() {
+func (conf *WGQuickConf) String() {
 	var sb strings.Builder
 
 	sb.WriteString("[Interface]\n")
