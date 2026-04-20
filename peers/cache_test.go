@@ -26,9 +26,11 @@ func randKey(rnd *rand.Rand) string {
 
 type mockNodeClient struct {
 	sync.RWMutex
-	rnd   *rand.Rand
-	peers []*peers.Peer
-	uuid  peers.NodeUUID
+	rnd              *rand.Rand
+	peers            []*peers.Peer
+	uuid             peers.NodeUUID
+	GetPeersStart    <-chan struct{} // not protected by mutex
+	GetPeersComplete <-chan struct{} // not protected by mutex
 }
 
 func newMockNodeClient() *mockNodeClient {
@@ -61,11 +63,17 @@ func (m *mockNodeClient) CreatePeer(ctx context.Context, Owner peers.UserUUID) (
 
 // GetPeers implements peers.NodeClient.
 func (m *mockNodeClient) GetPeers(ctx context.Context) ([]peers.Peer, error) {
+	if m.GetPeersStart != nil {
+		<-m.GetPeersStart
+	}
 	defer m.RUnlock()
 	m.RLock()
 	peers := make([]peers.Peer, 0, len(m.peers))
 	for _, peer := range m.peers {
 		peers = append(peers, *peer)
+	}
+	if m.GetPeersComplete != nil {
+		<-m.GetPeersComplete
 	}
 	return peers, nil
 }
@@ -108,8 +116,8 @@ func assertCachedPeerLists(t *testing.T, ps1 []peers.CachedPeer, ps2 []peers.Cac
 
 func TestCache(t *testing.T) {
 	const (
-		ttl     = time.Millisecond * 100
-		timeout = time.Millisecond * 100
+		ttl     = time.Millisecond * 50
+		timeout = time.Millisecond * 50
 	)
 	cache := peers.NewCache(timeout, ttl)
 	node1Client := newMockNodeClient()
@@ -152,19 +160,16 @@ func TestCache(t *testing.T) {
 	})
 
 	cachedPeer1Exp := peers.CachedPeer{
-		Peer:  *peer1,
-		Dirty: true,
-		Node:  &node1,
+		Peer: *peer1,
+		Node: &node1,
 	}
 	cachedPeer2Exp := peers.CachedPeer{
-		Peer:  *peer2,
-		Dirty: true,
-		Node:  &node2,
+		Peer: *peer2,
+		Node: &node2,
 	}
 	cachedPeer3Exp := peers.CachedPeer{
-		Peer:  *peer3,
-		Dirty: true,
-		Node:  &node2,
+		Peer: *peer3,
+		Node: &node2,
 	}
 
 	t.Run("test GetPeer()", func(t *testing.T) {
@@ -194,7 +199,12 @@ func TestCache(t *testing.T) {
 		cache.UpdatePeer(peer1.PublicKey, func(peer *peers.CachedPeer) {
 			peer.Enabled = false
 		})
+		cache.UpdatePeer(peer3.PublicKey, func(peer *peers.CachedPeer) {
+			peer.Enabled = false
+		})
 		cachedPeer1Exp.Enabled = false
+		cachedPeer3Exp.Enabled = false
+		peer3.Enabled = false
 	})
 
 	t.Run("test GetAllPeers()", func(t *testing.T) {
@@ -297,11 +307,165 @@ func TestCache(t *testing.T) {
 		})
 	})
 
-	t.Run("test auto-refresh", func(t *testing.T) {
-		// TODO: add auto-refresh test
+	rnd := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
+
+	t.Run("test GetAllPeers() auto-refresh", func(t *testing.T) {
+		peer1.PresharedKey = peers.PresharedKey(randKey(rnd))
+		cachedPeer1Exp.PresharedKey = peer1.PresharedKey
+		peer2.PresharedKey = peers.PresharedKey(randKey(rnd))
+		cachedPeer2Exp.PresharedKey = peer2.PresharedKey
+		time.Sleep(ttl * 2)
+		cachedPeers, err := cache.GetAllPeers(context.Background())
+		if err != nil {
+			t.Fatalf("Unexpected error from GetAllPeers(): %s", err)
+		}
+		assertCachedPeerLists(t, cachedPeers, []peers.CachedPeer{
+			cachedPeer1Exp,
+			cachedPeer2Exp,
+			cachedPeer3Exp,
+		})
 	})
 
-	// TODO: add refresh-overwrite test 
+	t.Run("test GetPeer() auto-refresh", func(t *testing.T) {
+		peer3.PresharedKey = peers.PresharedKey(randKey(rnd))
+		cachedPeer3Exp.PresharedKey = peer3.PresharedKey
+		time.Sleep(ttl * 2)
+		cachedPeer3, err := cache.GetPeer(context.Background(), peer3.PublicKey)
+		if err != nil {
+			t.Fatalf("Unexpected error from GetPeers(): %s", err)
+		}
+		assertCachedPeer(t, &cachedPeer3, &cachedPeer3Exp)
+	})
+
+	t.Run("test GetNodePeers() auto-refresh", func(t *testing.T) {
+		peer2.PresharedKey = peers.PresharedKey(randKey(rnd))
+		cachedPeer2Exp.PresharedKey = peer2.PresharedKey
+		time.Sleep(ttl * 2)
+		cachedNodePeers, err := cache.GetNodePeers(context.Background(), node2.UUID)
+		if err != nil {
+			t.Fatalf("Unexpected error from GetNodePeers(): %s", err)
+		}
+		assertCachedPeerLists(t, cachedNodePeers, []peers.CachedPeer{
+			cachedPeer2Exp,
+			cachedPeer3Exp,
+		})
+	})
+
+	t.Run("test GetUserPeers() auto-refresh", func(t *testing.T) {
+		peer2.PresharedKey = peers.PresharedKey(randKey(rnd))
+		cachedPeer2Exp.PresharedKey = peer2.PresharedKey
+		peer3.PresharedKey = peers.PresharedKey(randKey(rnd))
+		cachedPeer3Exp.PresharedKey = peer3.PresharedKey
+		time.Sleep(ttl * 2)
+		cachedUserPeers, err := cache.GetUserPeers(context.Background(), user2UUID)
+		if err != nil {
+			t.Fatalf("Unexpected error from GetUserPeers(): %s", err)
+		}
+		assertCachedPeerLists(t, cachedUserPeers, []peers.CachedPeer{
+			cachedPeer2Exp,
+			cachedPeer3Exp,
+		})
+	})
+
+	peer4 := node1Client.CreatePeerPtr(user1UUID)
+	cachedPeer4Exp := peers.CachedPeer{
+		Peer: *peer4,
+		Node: &node1,
+	}
+	t.Run("test Refresh() on new peer from node", func(t *testing.T) {
+		refreshStart := time.Now()
+		if err := cache.Refresh(context.Background()); err != nil {
+			t.Fatalf("Unexpected error from Refresh(): %s", err)
+		}
+		cachedPeers, err := cache.GetAllPeers(context.Background())
+		if err != nil {
+			t.Fatalf("Unexpected error from GetAllPeers(): %s", err)
+		}
+		assertCachedPeerLists(t, cachedPeers, []peers.CachedPeer{
+			cachedPeer1Exp,
+			cachedPeer2Exp,
+			cachedPeer3Exp,
+			cachedPeer4Exp,
+		})
+
+		cachedPeer4, err := cache.GetPeer(context.Background(), peer4.PublicKey)
+		if err != nil {
+			t.Fatalf("Unexpected error from GetPeer(): %s", err)
+		}
+		assertCachedPeer(t, &cachedPeer4, &cachedPeer4Exp)
+		if !cachedPeer4.Updated.At.Before(refreshStart) {
+			t.Fatalf("Peer4 update at timestamp is past the refresh start timestamp")
+		}
+		if !cachedPeer4.Updated.Successful() {
+			t.Fatalf("Unexpected update failure reported for peer4")
+		}
+	})
+
+	t.Run("test Refresh() doesn't overwrite dirty peers", func(t *testing.T) {
+		newPresharedKeyOnNode := peers.PresharedKey(randKey(rnd))
+		newPresharedKeyInCache := peers.PresharedKey(randKey(rnd))
+		t.Logf("PSK NODE %s", newPresharedKeyOnNode)
+		t.Logf("PSK CACHE %s", newPresharedKeyInCache)
+		t.Logf("PUBKEY %s", peer4.PublicKey)
+		peer4.PresharedKey = newPresharedKeyOnNode
+
+		cachedPeer4Exp.PresharedKey = newPresharedKeyInCache
+		if !cache.UpdatePeer(peer4.PublicKey, func(peer *peers.CachedPeer) {
+			peer.PresharedKey = newPresharedKeyInCache
+		}) {
+			t.Fatalf("Unexpected failure of UpdatePeer()")
+		}
+
+		getPeersBegin := make(chan struct{})
+		getPeersComplete := make(chan struct{})
+		node1Client.GetPeersStart = getPeersBegin
+		node1Client.GetPeersComplete = getPeersComplete
+
+		t.Run("Refresh()", func(t *testing.T) {
+			t.Parallel()
+
+			if err := cache.Refresh(context.Background()); err != nil {
+				t.Fatalf("Unexpected error from Refresh(): %s", err)
+			}
+
+			cachedPeer4, err := cache.GetPeer(context.Background(), peer4.PublicKey)
+			if err != nil {
+				t.Fatalf("Unexpected error from Refresh(): %s", err)
+			}
+			assertCachedPeer(t, &cachedPeer4, &cachedPeer4Exp)
+		})
+		t.Run("Put() then GetPeer()", func(t *testing.T) {
+			t.Parallel()
+			getPeersBegin <- struct{}{}
+			if !cache.PutPeer(cachedPeer4Exp.Peer, node1Client.uuid) {
+				t.Fatalf("Unexpected return from PutPeer()")
+			}
+			getPeersComplete <- struct{}{}
+		})
+
+		// var wg sync.WaitGroup
+		// wg.Add(2)
+		// go func() {
+		// 	// t.Parallel()
+
+		// 	if err := cache.Refresh(context.Background()); err != nil {
+		// 		// t.Fatalf("Unexpected error from Refresh(): %s", err)
+		// 	}
+		// 	wg.Done()
+		// }()
+		// go func(){
+		// 	// t.Parallel()
+		// 	getPeersBegin <- struct{}{}
+		// 	if !cache.PutPeer(cachedPeer4Exp.Peer, node1Client.uuid) {
+		// 		// t.Fatalf("Unexpected return from PutPeer()")
+		// 	}
+		// 	getPeersComplete <- struct{}{}
+		// 	wg.Done()
+		// }()
+		// wg.Wait()
+	})
+
+	// TODO: add refresh-overwrite test
 }
 
 // TODO: add race test

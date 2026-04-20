@@ -44,7 +44,6 @@ type Peer struct {
 
 type CachedPeer struct {
 	Peer
-	Dirty   bool
 	Node    *Node
 	Updated Updated
 }
@@ -60,6 +59,19 @@ type nodeCache struct {
 		sync.RWMutex // Write-locked on update, read-locked on status read
 		status       Updated
 	}
+}
+
+// Call on read-locked node.peers
+func (node *nodeCache) updatePeerUser(oldUserUUID *UserUUID, peer *CachedPeer) {
+	if oldUserUUID != nil {
+		if userMap, ok := node.peers.byUser[*oldUserUUID]; ok {
+			delete(userMap, peer.PublicKey)
+		}
+	}
+	if node.peers.byUser[peer.UserUUID] == nil {
+		node.peers.byUser[peer.UserUUID] = make(map[PublicKey]*CachedPeer)
+	}
+	node.peers.byUser[peer.UserUUID][peer.PublicKey] = peer
 }
 
 func (node *nodeCache) refresh(ctx context.Context, timeout time.Duration) error {
@@ -94,23 +106,24 @@ func (node *nodeCache) refresh(ctx context.Context, timeout time.Duration) error
 		node.peers.Lock()
 
 		for _, peer := range peers {
-			cachedPeer, wasCached := node.peers.m[peer.PublicKey]
-			if cachedPeer.Updated.At.After(requestStartedAt) {
-				// Update only if no newer changes to the peer were made since the request was started
-				continue
+			cachedPeer := node.peers.m[peer.PublicKey]
+			var oldUserUUID UserUUID
+			if cachedPeer == nil {
+				cachedPeer = new(CachedPeer)
+				cachedPeer.Node = &node.node
+				cachedPeer.Updated.AttemptedAt = requestStartedAt
+			} else {
+				if cachedPeer.Updated.At.After(requestStartedAt) {
+					// Update only if no newer changes to the peer were made since the request was started
+					continue
+				}
+				oldUserUUID = cachedPeer.UserUUID
 			}
 
 			cachedPeer.Peer = peer
-			cachedPeer.Node = &node.node
-			if !wasCached {
-				cachedPeer.Updated.AttemptedAt = requestStartedAt
-			}
 			cachedPeer.Updated.At = requestCompletedAt
 			node.peers.m[peer.PublicKey] = cachedPeer
-			if node.peers.byUser[peer.UserUUID] == nil {
-				node.peers.byUser[peer.UserUUID] = make(map[PublicKey]*CachedPeer)
-			}
-			node.peers.byUser[peer.UserUUID][peer.PublicKey] = cachedPeer
+			node.updatePeerUser(&oldUserUUID, cachedPeer)
 		}
 	}()
 
@@ -243,36 +256,40 @@ func (cache *Cache) UpdatePeer(pubkey PublicKey, updateFn func(peer *CachedPeer)
 	if cached == nil {
 		panic("never")
 	}
+
+	oldUserUUID := cached.UserUUID
 	updateFn(cached)
-	node.peers.byUser[cached.UserUUID][pubkey] = cached
+	node.updatePeerUser(&oldUserUUID, cached)
+
+	cached.Updated.AttemptedAt = time.Now()
+	cached.Updated.At = time.Now()
 
 	return true
 }
 
 // Returns false iff no such node exists.
 func (cache *Cache) PutPeer(newPeer Peer, nodeUUID NodeUUID) bool {
-	cache.Lock()
+	cache.RLock()
 	node := cache.nodes[nodeUUID]
-	cache.Unlock()
+	cache.RUnlock()
 	if node == nil {
 		return false
 	}
 	node.peers.Lock()
 	defer node.peers.Unlock()
-	cachedPeer := &CachedPeer{
-		Peer:  newPeer,
-		Dirty: true,
-		Node:  &node.node,
-		Updated: Updated{
-			At:          time.Time{},
-			AttemptedAt: time.Time{},
-		},
+
+	var oldUserUUID *UserUUID
+	cachedPeer := node.peers.m[newPeer.PublicKey]
+	if cachedPeer != nil {
+		oldUserUUID = &cachedPeer.UserUUID
+	} else {
+		cachedPeer = new(CachedPeer)
+		cachedPeer.Node = &node.node
 	}
+	cachedPeer.Peer = newPeer
+
 	node.peers.m[newPeer.PublicKey] = cachedPeer
-	if _, contains := node.peers.byUser[newPeer.UserUUID]; !contains {
-		node.peers.byUser[newPeer.UserUUID] = make(map[PublicKey]*CachedPeer)
-	}
-	node.peers.byUser[newPeer.UserUUID][newPeer.PublicKey] = cachedPeer
+	node.updatePeerUser(oldUserUUID, cachedPeer)
 	return true
 }
 
@@ -376,12 +393,11 @@ func (cache *Cache) GetUserPeers(ctx context.Context, userUUID UserUUID) ([]Cach
 				continue
 			}
 
-			for pubkey, peer := range userPeers {
+			for _, peer := range userPeers {
 				if peer.UserUUID != userUUID {
-					delete(userPeers, pubkey)
-				} else {
-					peers = append(peers, *peer)
+					panic("never")
 				}
+				peers = append(peers, *peer)
 			}
 
 			node.peers.RUnlock()
