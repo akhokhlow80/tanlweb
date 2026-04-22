@@ -18,7 +18,7 @@ function timestampFormatter(timestamp, format) {
   console.log(timestamp, format)
   const date = new Date(timestamp*1000)
   const locale = "en-GB"
-  const useAgo = new Date() - date <= 30*24*60*1000
+  const useAgo = new Date() - date <= 30*24*60*60*1000
   switch (format) {
   case "local-datetime":
     return date.toLocaleDateString(locale) + " " + date.toLocaleTimeString(locale)
@@ -28,8 +28,8 @@ function timestampFormatter(timestamp, format) {
       formatted += " (" + timeago.format(date, 'en_short') + ")"
     return formatted
   case "ago":
-    if (useAgo, 'en_short')
-      return timeago.format(date)
+    if (useAgo)
+      return timeago.format(date, 'en_short')
     else
       return date.toLocaleDateString(locale) + " " + date.toLocaleTimeString(locale)
   default:
