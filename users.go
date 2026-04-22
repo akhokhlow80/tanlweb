@@ -2,9 +2,9 @@ package main
 
 import (
 	"akhokhlow80/tanlweb/auth"
-	"akhokhlow80/tanlweb/scopes"
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -14,6 +14,28 @@ import (
 
 	"github.com/google/uuid"
 )
+
+func (app *app) addRootUserIfNotExists(ctx context.Context) error {
+	defer app.db.RUnlock()
+	app.db.RLock()
+
+	users, err := app.db.GetUsers(ctx)
+	if err != nil {
+		return err
+	}
+	if len(users) == 0 {
+		user, err := app.db.AddUser(ctx, sqlgen.AddUserParams{
+			Uuid:        uuid.New().String(),
+			Description: "root",
+			Scopes:      auth.FullScope.String(),
+		})
+		if err != nil {
+			return fmt.Errorf("Error adding root user: %w", err)
+		}
+		log.Printf("Created root user %s with full scope", user.Uuid)
+	}
+	return nil
+}
 
 func (app *app) registerUsersHandlers(m *http.ServeMux) {
 	m.HandleFunc("GET /users/new", web.FailableHandler(app.StandardErrorHandler, app.newUserPage))
@@ -29,7 +51,7 @@ type userView struct {
 	UUID        string
 	Description string
 	Fee         string
-	Scopes      scopes.Scopes
+	Scopes      auth.Scopes
 	PaidUntil   string
 	IsBanned    bool
 }
@@ -39,7 +61,7 @@ func userViewFromDB(dbUser *sqlgen.User) userView {
 	if dbUser.PaidUntil != nil {
 		paidUntil = dbUser.PaidUntil.Format("2006-01-02")
 	}
-	scopes, err := scopes.Parse(dbUser.Scopes)
+	scopes, err := auth.ParseScopes(dbUser.Scopes)
 	if err != nil {
 		log.Printf("Failed to parse scopes `%s` from DB of user `%s`: %s", dbUser.Scopes, dbUser.Uuid, err)
 	}
@@ -74,7 +96,7 @@ func (app *app) putUser(w http.ResponseWriter, r *http.Request) error {
 	}
 	description := web.FormScalar(r.Form, "description")
 	fee := web.FormTrimmedScalar(r.Form, "fee")
-	var scopes scopes.Scopes
+	var scopes auth.Scopes
 	if web.FormTrimmedScalar(r.Form, "scope-users") == "on" {
 		scopes.Users = true
 	}
@@ -156,10 +178,14 @@ func (app *app) putUserPaidUntil(w http.ResponseWriter, r *http.Request) error {
 
 	// TODO: change status to active if was suspended
 
-	dbUser, err := app.db.UpdateUserPaidUntil(r.Context(), sqlgen.UpdateUserPaidUntilParams{
-		PaidUntil: &paidUntil,
-		Uuid:      r.PathValue("uuid"),
-	})
+	dbUser, err := func() (sqlgen.User, error) {
+		defer app.db.Unlock()
+		app.db.Lock()
+		return app.db.UpdateUserPaidUntil(r.Context(), sqlgen.UpdateUserPaidUntilParams{
+			PaidUntil: &paidUntil,
+			Uuid:      r.PathValue("uuid"),
+		})
+	}()
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
@@ -186,10 +212,14 @@ func (app *app) putUserBan(w http.ResponseWriter, r *http.Request) error {
 
 	ban := web.FormScalar(r.Form, "ban") == "true"
 
-	dbUser, err := app.db.BanUser(r.Context(), sqlgen.BanUserParams{
-		Banned: ban,
-		Uuid:   r.PathValue("uuid"),
-	})
+	dbUser, err := func() (sqlgen.User, error) {
+		defer app.db.Unlock()
+		app.db.Lock()
+		return app.db.BanUser(r.Context(), sqlgen.BanUserParams{
+			Banned: ban,
+			Uuid:   r.PathValue("uuid"),
+		})
+	}()
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound

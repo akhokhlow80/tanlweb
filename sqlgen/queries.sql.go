@@ -114,6 +114,136 @@ func (q *Queries) BanUser(ctx context.Context, arg BanUserParams) (User, error) 
 	return i, err
 }
 
+const cancelNewPeerRequest = `-- name: CancelNewPeerRequest :one
+UPDATE new_peer_requests SET
+    status = 'cancelled'
+WHERE
+    uuid = ?1
+RETURNING id, uuid, interface_name, requested_at, requested_by_user_uuid, node_id, owned_by_user_id, status
+`
+
+func (q *Queries) CancelNewPeerRequest(ctx context.Context, uuid string) (NewPeerRequest, error) {
+	row := q.db.QueryRowContext(ctx, cancelNewPeerRequest, uuid)
+	var i NewPeerRequest
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.InterfaceName,
+		&i.RequestedAt,
+		&i.RequestedByUserUuid,
+		&i.NodeID,
+		&i.OwnedByUserID,
+		&i.Status,
+	)
+	return i, err
+}
+
+const createNewPeerRequest = `-- name: CreateNewPeerRequest :exec
+INSERT INTO new_peer_requests (
+    uuid,
+    interface_name,
+    requested_at,
+    requested_by_user_uuid,
+    node_id,
+    owned_by_user_id
+) VALUES (
+    ?1,
+    ?2,
+    ?3,
+    ?4,
+    ?5,
+    ?6
+)
+`
+
+type CreateNewPeerRequestParams struct {
+	Uuid                string
+	InterfaceName       string
+	RequestedAt         time.Time
+	RequestedByUserUuid *string
+	NodeID              int64
+	OwnedByUserID       int64
+}
+
+func (q *Queries) CreateNewPeerRequest(ctx context.Context, arg CreateNewPeerRequestParams) error {
+	_, err := q.db.ExecContext(ctx, createNewPeerRequest,
+		arg.Uuid,
+		arg.InterfaceName,
+		arg.RequestedAt,
+		arg.RequestedByUserUuid,
+		arg.NodeID,
+		arg.OwnedByUserID,
+	)
+	return err
+}
+
+const getNewPeerRequests = `-- name: GetNewPeerRequests :many
+SELECT
+    new_peer_requests.uuid,
+    new_peer_requests.requested_at,
+    new_peer_requests.requested_by_user_uuid,
+    new_peer_requests.interface_name,
+    new_peer_requests.status,
+    nodes.uuid as node_uuid,
+    nodes.name as node_name,
+    owners.uuid as owned_by_user_uuid
+FROM new_peer_requests
+    JOIN nodes on nodes.id = new_peer_requests.node_id
+    JOIN users AS owners on owners.id = new_peer_requests.owned_by_user_id
+WHERE
+    new_peer_requests.uuid = COALESCE(?1, new_peer_requests.uuid) AND
+    (?2 OR new_peer_requests.status NOT IN ('created', 'cancelled'))
+ORDER BY requested_at DESC
+`
+
+type GetNewPeerRequestsParams struct {
+	Uuid             *string
+	IncludeCompleted interface{}
+}
+
+type GetNewPeerRequestsRow struct {
+	Uuid                string
+	RequestedAt         time.Time
+	RequestedByUserUuid *string
+	InterfaceName       string
+	Status              string
+	NodeUuid            string
+	NodeName            string
+	OwnedByUserUuid     string
+}
+
+func (q *Queries) GetNewPeerRequests(ctx context.Context, arg GetNewPeerRequestsParams) ([]GetNewPeerRequestsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getNewPeerRequests, arg.Uuid, arg.IncludeCompleted)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetNewPeerRequestsRow
+	for rows.Next() {
+		var i GetNewPeerRequestsRow
+		if err := rows.Scan(
+			&i.Uuid,
+			&i.RequestedAt,
+			&i.RequestedByUserUuid,
+			&i.InterfaceName,
+			&i.Status,
+			&i.NodeUuid,
+			&i.NodeName,
+			&i.OwnedByUserUuid,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getNodeByUUID = `-- name: GetNodeByUUID :one
 SELECT id, uuid, name, base_uri FROM nodes
 WHERE uuid = ?1
@@ -309,6 +439,38 @@ DELETE FROM nodes WHERE id = ?1
 
 func (q *Queries) RemoveNode(ctx context.Context, id int64) (int64, error) {
 	result, err := q.db.ExecContext(ctx, removeNode, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const updateNewPeerRequest = `-- name: UpdateNewPeerRequest :execrows
+UPDATE new_peer_requests SET
+    interface_name = ?1,
+    requested_at = ?2,
+    requested_by_user_uuid = ?3,
+    status = ?4
+WHERE
+    uuid = ?5
+`
+
+type UpdateNewPeerRequestParams struct {
+	InterfaceName       string
+	RequestedAt         time.Time
+	RequestedByUserUuid *string
+	Status              string
+	Uuid                string
+}
+
+func (q *Queries) UpdateNewPeerRequest(ctx context.Context, arg UpdateNewPeerRequestParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateNewPeerRequest,
+		arg.InterfaceName,
+		arg.RequestedAt,
+		arg.RequestedByUserUuid,
+		arg.Status,
+		arg.Uuid,
+	)
 	if err != nil {
 		return 0, err
 	}

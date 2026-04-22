@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
-	"github.com/google/uuid"
 	"github.com/pressly/goose/v3"
 )
 
@@ -69,20 +68,8 @@ func (app *app) initDB(dbPath string) error {
 
 	app.db.Queries = sqlgen.New(app.db.DB)
 
-	users, err := app.db.GetUsers(context.Background())
-	if err != nil {
+	if err := app.addRootUserIfNotExists(context.Background()); err != nil {
 		return err
-	}
-	if len(users) == 0 {
-		user, err := app.db.AddUser(context.Background(), sqlgen.AddUserParams{
-			Uuid:        uuid.New().String(),
-			Description: "root",
-			Scopes:      auth.FullScope.String(),
-		})
-		if err != nil {
-			return fmt.Errorf("Error adding root user: %w", err)
-		}
-		log.Printf("Created root user %s with full scope", user.Uuid)
 	}
 
 	return nil
@@ -93,6 +80,14 @@ func (app *app) initTmpl() error {
 		"BaseURI": func() string {
 			return app.cfg.BaseURI
 		},
+		"ShortenUUID": func(uuidStr string) string {
+			if len(uuidStr) > 24 {
+				return uuidStr[24:]
+			} else {
+				return uuidStr
+			}
+		},
+		"TimeUnix": time.Time.Unix,
 	}
 	app.tmpl = template.New("").Funcs(templateFuncs)
 	htmlFS, err := fs.Sub(htmlTemplates, "html")
@@ -126,6 +121,7 @@ func (app *app) cmdListen() error {
 	app.registerNodeHandlers(securedMux)
 	app.registerUsersHandlers(securedMux)
 	app.registerIndexPage(securedMux)
+	app.registerPeerHandlers(securedMux)
 
 	mux := http.NewServeMux()
 	app.registerAuthHandlers(mux)
@@ -190,7 +186,7 @@ func main() {
 		log.Fatalf("Failed to parse private key: %s", err)
 	}
 	if len(authPrivateKey) < 128 {
-		log.Fatalf("Key lenght is not safe")
+		log.Fatalf("Key length is not safe")
 	}
 	app.auth = auth.NewService(
 		&subjectsRepo{&app.db},

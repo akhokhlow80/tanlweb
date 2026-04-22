@@ -1,0 +1,67 @@
+<div id="peer-request-view" hx-swap-oob="true">
+  <h2>
+    {{if eq .Status .ConstStatus.Pending .ConstStatus.ConfigRequested}}
+      <span>&#128337;</span>
+    {{else if eq .Status .ConstStatus.Created}}
+      <span class="request-created">&#10003;</span>
+    {{else if eq .Status .ConstStatus.Cancelled}}
+      <span class="request-cancelled">&#10007;</span>
+    {{end}}
+    Request {{slice .UUID 24}} to create a new peer
+  </h2>
+
+  <div class="fields-container">
+    <div class="field">
+      <p class="name">Node:</p>
+      <a href="{{BaseURI}}/nodes/{{.NodeUUID}}">{{.NodeName}}</a>
+    </div>
+    <div class="field">
+      <p class="name">For user:</p>
+      <a href="{{BaseURI}}/users/{{.OwnedByUserUUID}}">{{ShortenUUID .OwnedByUserUUID}}</a>
+    </div>
+    {{if not .Status.Completed}}
+      <div class="field">
+        <p class="name">Requested at:</p>
+        <div class="value">
+          <p timestamp="{{.RequestedAtUnix}}" timestamp-format="local-datetime-with-ago"></p>
+        </div>
+      </div>
+      <div class="field">
+        <p class="name">Requested by:</p>
+        <a href="{{BaseURI}}/users/{{.RequestedByUserUUID}}">{{ShortenUUID .RequestedByUserUUID}}</a>
+      </div>
+      <div class="field">
+        <p class="name">Config name:</p>
+        <pre class="value inline">{{.InterfaceName}}.conf</pre>
+      </div>
+    {{end}}
+    <div class="field">
+      <p class="name">Status:</p>
+      <p>
+        <span {{if eq .Status .ConstStatus.Pending}}class="current-state"{{end}}>Pending</span>
+        <span class="state-trans">&rarr;</span>
+        <span {{if eq .Status .ConstStatus.ConfigRequested}}class="current-state"{{end}}>Config requested</span>
+        <span class="state-trans">&rarr;</span>
+        <span {{if eq .Status .ConstStatus.Created}}class="current-state"{{end}}>Created</span>
+        <span class="state-trans">|</span>
+        <span {{if eq .Status .ConstStatus.Cancelled}}class="current-state"{{end}}>Cancelled</span>
+      </p>
+    </div>
+    {{if not .Status.Completed}}
+      <div
+        onclick="copyToClipboard(document.getElementById('config-url').textContent)"
+        id="config-url-container"
+      >
+        <p id="config-url-label">Link for user to get the config (click to copy):</p>
+        <pre id="config-url" class="inline">{{BaseURI}}/configs/{{.UUID}}</pre>
+      </div>
+
+      <form
+        hx-swap="none"
+        hx-post="{{BaseURI}}/peers/requests/{{.UUID}}/cancel"
+        hx-disabled-elt="find input[type='submit']">
+        <input type="submit" value="Cancel">
+      </form>
+    {{end}}
+  </div>
+</div>

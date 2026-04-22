@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    {{template "head" "Peer request"}}
+  </head>
+  <body>
+    <div id="notifications-container"></div>
+    {{template "navigation" "peers"}}
+    <main>
+      {{template "peers/request-view" .}}
+    </main>
+  </body>
+</html>

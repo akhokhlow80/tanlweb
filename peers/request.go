@@ -6,25 +6,29 @@ import (
 	"time"
 )
 
-type PeerRequestStatus int
+type PeerRequestStatus string
 
 const (
-	Pending PeerRequestStatus = iota
-	ConfigRequested
-	Created
-	Cancelled
+	Pending         PeerRequestStatus = "pending"
+	ConfigRequested PeerRequestStatus = "config-requested"
+	Created         PeerRequestStatus = "created"
+	Cancelled       PeerRequestStatus = "cancelled"
 )
 
-type CreatePeerRequest struct {
+func (status PeerRequestStatus) Completed() bool {
+	return status == Created || status == Cancelled
+}
+
+type PeerRequest struct {
 	UUID   string
 	Status PeerRequestStatus
 	// Cleared after the peer was created.
 	Sensitive struct {
-		InterfaceName   string
-		AddedAt         time.Time
-		AddedByUserUUID string
+		InterfaceName       string
+		RequestedAt         time.Time
+		RequestedByUserUUID string
 	}
-	Node      string
+	NodeUUID  string
 	OwnerUUID string
 }
 
@@ -35,7 +39,7 @@ type RequestUpdater interface {
 	Do(
 		ctx context.Context,
 		reqUUID string,
-		updateFn func(ctx context.Context, req *CreatePeerRequest) error,
+		updateFn func(ctx context.Context, req *PeerRequest) error,
 	) error
 }
 
@@ -46,16 +50,16 @@ type CreatePeerNodeClient interface {
 var ErrRequestCompleted = errors.New("Request is either successfuly completed or cancelled")
 
 // Errors: ErrRequestCompleted
-func (req *CreatePeerRequest) Complete(
+func (req *PeerRequest) Complete(
 	ctx context.Context,
-	updateReq RequestUpdater,
+	updateRequest RequestUpdater,
 	createPeer CreatePeerNodeClient,
 ) (WGQuickConf, Peer, error) {
-	err := updateReq.Do(ctx, req.UUID, func(ctx context.Context, updReq *CreatePeerRequest) error {
+	err := updateRequest.Do(ctx, req.UUID, func(ctx context.Context, updReq *PeerRequest) error {
 		if updReq.Status != Pending {
 			return ErrRequestCompleted
 		}
-		updReq.Sensitive.AddedAt = time.Time{}
+		updReq.Sensitive.RequestedAt = time.Time{}
 		updReq.Sensitive.InterfaceName = ""
 		updReq.Status = ConfigRequested
 		*req = *updReq
@@ -70,7 +74,7 @@ func (req *CreatePeerRequest) Complete(
 		return WGQuickConf{}, Peer{}, err
 	}
 
-	err = updateReq.Do(ctx, req.UUID, func(ctx context.Context, updReq *CreatePeerRequest) error {
+	err = updateRequest.Do(ctx, req.UUID, func(ctx context.Context, updReq *PeerRequest) error {
 		updReq.Status = Created
 		*req = *updReq
 		return nil

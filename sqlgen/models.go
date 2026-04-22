@@ -8,6 +8,17 @@ import (
 	"time"
 )
 
+type NewPeerRequest struct {
+	ID                  int64
+	Uuid                string
+	InterfaceName       string
+	RequestedAt         time.Time
+	RequestedByUserUuid *string
+	NodeID              int64
+	OwnedByUserID       int64
+	Status              string
+}
+
 type Node struct {
 	ID      int64
 	Uuid    string

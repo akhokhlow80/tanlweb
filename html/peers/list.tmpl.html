@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    {{template "head" "Peers list"}}
+  </head>
+  <body>
+    {{template "navigation" "peers"}}
+    {{if .NewRequests}}
+      <details>
+        <summary>
+          Requests ({{len .NewRequests}})
+        </summary>
+        <table>
+          <thead>
+            <tr>
+              <td>Peer</td>
+              <td>For user</td>
+              <td>Requested by</td>
+              <td>Node</td>
+              <td>Added</td>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .NewRequests}}
+              <tr>
+                <td>
+                  <a href="{{BaseURI}}/peers/requests/{{.UUID}}">{{ShortenUUID .UUID}}</a>
+                </td>
+                <td>
+                  <a href="{{BaseURI}}/users/{{.OwnedByUserUUID}}">{{ShortenUUID .OwnedByUserUUID}}</a>
+                </td>
+                <td>
+                  {{if not .Status.Completed}}
+                    <a href="{{BaseURI}}/users/{{.RequestedByUserUUID}}">
+                      {{ShortenUUID .RequestedByUserUUID}}
+                    </a>
+                  {{end}}
+                </td>
+                <td>
+                  <a href="{{BaseURI}}/nodes/{{.NodeUUID}}">{{.NodeName}}</a>
+                </td>
+                  {{if not .Status.Completed}}
+                    <td
+                      timestamp="{{.RequestedAtUnix}}"
+                      timestamp-format="ago"
+                    ></td>
+                  {{else}}
+                    <td></td>
+                  {{end}}
+              </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </details>
+    {{end}}
+  </body>
+</html>
+

@@ -21,12 +21,24 @@ a:not([href]) {
   color: #8483eb;
 }
 
-main *:not(h1, h2, h3, div, button) {
+main *:not(h1, h2, h3, div, button, span) {
   margin-left: 5pt;
 }
 
 hr {
   margin-top: 20pt;
+}
+
+pre {
+  color: rgb(60, 60, 60);
+  background-color: rgb(230, 230, 230);
+  border-radius: 7px;
+}
+
+pre.inline {
+  display: inline-block;
+  margin: 2pt 0;
+  padding: 1pt 6pt;
 }
 
 /* Navigation */
@@ -81,10 +93,16 @@ label.checkbox {
   margin-left: 1pt;
 }
 
+label.required::after {
+  content: " *";
+  color: #eb3434;
+}
+
 /* Fields */
 
 .field {
-  display: inline;
+  margin-top: 5pt;
+  display: block;
 }
 
 .field * {
@@ -94,15 +112,6 @@ label.checkbox {
 .field > .name {
   font-weight: 700;
   margin-bottom: 5pt;
-}
-
-.long-value-container {
-  display: block;
-  overflow-x: auto;
-  overflow-y: hidden;
-  white-space: nowrap;
-  padding: 0;
-  margin: 5pt;
 }
 
 /* Notifications */
@@ -203,4 +212,53 @@ input.add-new {
 
 .user-status-banned {
   color: #b02121;
+}
+
+/* Peer */
+
+#inteface-name-container {
+  padding: 0;
+  margin: 0;
+}
+
+#interface-name-container > * {
+  display: inline;
+}
+
+#interface-name-container > input {
+  font-size: 12pt;
+}
+
+#interface-name-container > span {
+  margin-left: 0;
+}
+
+.current-state {
+  text-decoration: underline;
+}
+
+.state-trans {
+  font-size: 15pt;
+}
+
+.request-cancelled {
+  color: #b02121;
+}
+
+.request-created {
+  color: #238c3f;
+}
+
+#config-url-container {
+  margin-top: 5pt;
+  cursor: pointer;
+}
+
+#config-url-label {
+  margin-bottom: 1.5pt;
+  font-weight: 700;
+}
+
+#config-url {
+  margin-top: 1.5pt;
 }

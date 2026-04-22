@@ -119,5 +119,16 @@
       />
       <input class="submit" type="submit" value="{{if .IsBanned}}Unban{{else}}Ban{{end}}"/>
     </form>
+
+    <hr>
+
+    {{if .UUID}}
+      <form action="{{BaseURI}}/peers/new" method="get">
+        <input name="user-uuid" type="hidden" value="{{.UUID}}">
+        <input type="submit" class="add-new" value="+ Add new peer" />
+      </form>
+
+      <!-- TODO: peers list -->
+    {{end}}
   {{end}}
 </div>

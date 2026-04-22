@@ -51,6 +51,10 @@ function convertTimeStamps() {
   })
 }
 
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).catch(err => console.error('Failed to copy: ', err));
+}
+
 document.addEventListener("htmx:afterSettle", function(evt) { convertTimeStamps() })
 document.addEventListener("DOMContentLoaded", function(evt) { convertTimeStamps() })
 setInterval(convertTimeStamps, 20 * 1000)

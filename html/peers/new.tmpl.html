@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    {{template "head" "New Peer"}}
+  </head>
+  <body>
+    <div id="notifications-container"></div>
+    {{template "navigation" "peers"}}
+
+    <h2>Add new peer for user <a href="{{BaseURI}}/users/{{.UserUUID}}">{{slice .UserUUID 24}}</a></h2>
+
+    <main>
+      <form
+        hx-post="{{BaseURI}}/peers"
+        hx-swap="none"
+        hx-disabled-elt="find input[type='submit']"
+      >
+        <input type="hidden" name="user-uuid" value="{{.UserUUID}}">
+
+        <label for="node-uuid" class="required">Node (cannot be changed later)</label>
+        <span id="node-uuid-empty"></span>
+        <select
+          name="node-uuid"
+          id="node-uuid"
+        >
+          {{range .Nodes}}
+            <option value="{{.UUID}}">{{.Name}}</option>
+          {{end}}
+        </select>
+
+        <label for="interface-name" class="required">
+          Name of the user-side interface and the config file.
+          <br>
+          Length: 1-15,
+          allowed characters: <pre class="inline">a-zA-Z0-9_=+.-</pre>
+          <br>
+          Example: <pre class="inline">pc-home1</pre>
+        </label>
+        <span id="invalid-interface-name"></span>
+        <div id="interface-name-container">
+          <input name="interface-name" id="interface-name" type="text"/>
+          <span>.conf</span>
+        </div>
+
+        <input type="submit" value="Create"/>
+      </form>
+    </main>
+  </body>
+</html>
