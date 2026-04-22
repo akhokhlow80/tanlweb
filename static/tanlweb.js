@@ -15,7 +15,6 @@ document.addEventListener("htmx:responseError", function(evt) {
 })
 
 function timestampFormatter(timestamp, format) {
-  console.log(timestamp, format)
   const date = new Date(timestamp*1000)
   const locale = "en-GB"
   const useAgo = new Date() - date <= 30*24*60*60*1000
