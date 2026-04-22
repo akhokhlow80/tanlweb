@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -142,7 +143,7 @@ func (c *Cipher) Decrypt(encryptedPathBase64 string) (string, bool) {
 
 // Returns nil on decryption and parsing failures.
 func DecryptURL(c *Cipher, u *url.URL) *url.URL {
-	decryptedRawPath, ok := c.Decrypt(u.Path[1:]) // trim leading /
+	decryptedRawPath, ok := c.Decrypt(strings.TrimPrefix(u.Path, "/"))
 	if !ok {
 		return nil
 	}
