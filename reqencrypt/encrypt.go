@@ -19,7 +19,7 @@ import (
 const KeySize = chacha20poly1305.KeySize
 
 type Keys struct {
-	Keys        [2][KeySize]byte
+	Keys        [2]*[KeySize]byte
 	RotateAfter time.Time
 }
 
@@ -36,6 +36,7 @@ type Cipher struct {
 
 func (c *Cipher) rotateKeys(ctx context.Context, rotationInterval time.Duration, keys *Keys) error {
 	keys.Keys[1] = keys.Keys[0]
+	keys.Keys[0] = new([KeySize]byte)
 	rand.Read(keys.Keys[0][:])
 
 	defer c.Unlock()
@@ -55,9 +56,14 @@ func (c *Cipher) rotateKeys(ctx context.Context, rotationInterval time.Duration,
 	return nil
 }
 
-func (c *Cipher) rotateKeysRoutine(keys Keys, rotationInterval time.Duration) {
+func (c *Cipher) rotateKeysRoutine(ctx context.Context, keys Keys, rotationInterval time.Duration) {
+	timer := time.NewTimer(time.Until(keys.RotateAfter))
 	for {
-		time.Sleep(time.Until(keys.RotateAfter))
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
 
 		err := c.rotateKeys(context.Background(), rotationInterval, &keys)
 		if err != nil {
@@ -65,6 +71,8 @@ func (c *Cipher) rotateKeysRoutine(keys Keys, rotationInterval time.Duration) {
 		}
 
 		log.Printf("reqencrypt: Key rotated")
+
+		timer.Reset(time.Until(keys.RotateAfter))
 	}
 }
 
@@ -74,13 +82,28 @@ func NewCipher(ctx context.Context, store KeyStore, rotateInterval time.Duration
 		return nil, err
 	}
 	c := &Cipher{store: store}
-	if time.Now().After(keys.RotateAfter) {
+
+	if keys.Keys[0] != nil && time.Now().Before(keys.RotateAfter) {
+		// If has key and pair is not expired, then just make aead.Cipher
+		c.aead[0], err = chacha20poly1305.NewX(keys.Keys[0][:])
+		if err != nil {
+			return nil, err
+		}
+		if keys.Keys[1] != nil {
+			c.aead[1], err = chacha20poly1305.NewX(keys.Keys[1][:])
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		// If has no key, or it is expired, rotate and init aead.Cipher
 		err = c.rotateKeys(ctx, rotateInterval, &keys)
 		if err != nil {
 			return nil, err
 		}
+		log.Printf("reqencrypt: Key rotated")
 	}
-	go c.rotateKeysRoutine(keys, rotateInterval)
+	go c.rotateKeysRoutine(ctx, keys, rotateInterval)
 	return c, nil
 }
 
@@ -143,22 +166,28 @@ func (c *Cipher) Decrypt(encryptedPathBase64 string) (string, bool) {
 
 // Returns nil on decryption and parsing failures.
 func DecryptURL(c *Cipher, u *url.URL) *url.URL {
-	decryptedRawPath, ok := c.Decrypt(strings.TrimPrefix(u.Path, "/"))
+	path := strings.TrimLeftFunc(u.Path, func(r rune) bool {
+		return r == '/'
+	})
+	decryptedRawPath, ok := c.Decrypt(path)
 	if !ok {
 		return nil
 	}
-	decryptedPathURL, err := url.Parse("/" + decryptedRawPath)
+	// decryptedRawPath = strings.TrimLeftFunc(decryptedRawPath, func(r rune) bool {
+	// 	return r == '/'
+	// })
+	decryptedPathURI, err := url.ParseRequestURI("/" + decryptedRawPath)
 	if err != nil {
 		return nil
 	}
 	u2 := new(url.URL)
 	*u2 = *u
-	u2.Path = decryptedPathURL.Path
-	u2.Fragment = decryptedPathURL.Fragment
-	u2.RawQuery = decryptedPathURL.RawQuery
-	u2.RawPath = decryptedPathURL.RawPath
-	u2.RawFragment = decryptedPathURL.RawFragment
-	u2.ForceQuery = decryptedPathURL.ForceQuery
+	u2.Path = decryptedPathURI.Path
+	u2.Fragment = decryptedPathURI.Fragment
+	u2.RawQuery = decryptedPathURI.RawQuery
+	u2.RawPath = decryptedPathURI.RawPath
+	u2.RawFragment = decryptedPathURI.RawFragment
+	u2.ForceQuery = decryptedPathURI.ForceQuery
 	return u2
 }
 
