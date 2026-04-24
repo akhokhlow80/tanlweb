@@ -47,7 +47,7 @@ func (app *app) loginHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 	http.SetCookie(w, &refreshCookie)
 	http.SetCookie(w, &accessCookie)
-	w.Header().Set("Location", fmt.Sprintf("%s/", app.cfg.BaseURI))
+	w.Header().Set("Location", app.EncryptURI(""))
 	w.WriteHeader(http.StatusSeeOther)
 	return nil
 }

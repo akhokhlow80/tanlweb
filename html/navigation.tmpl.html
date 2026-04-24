@@ -1,18 +1,18 @@
 <div id="navigation">
   <a
-    href="{{BaseURI}}/peers"
+    href='{{ EncryptURI "peers" }}'
     {{if eq . `peers`}}
       class="current"
     {{end}}
     >Peers</a>
   <a
-    href="{{BaseURI}}/users"
+    href='{{ EncryptURI "users" }}'
     {{if eq . `users`}}
       class="current"
     {{end}}
     >Users</a>
   <a
-    href="{{BaseURI}}/nodes"
+    href='{{ EncryptURI "nodes" }}'
     {{if eq . `nodes`}}
       class="current"
     {{end}}

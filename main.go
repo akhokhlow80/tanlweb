@@ -3,6 +3,7 @@ package main
 import (
 	"akhokhlow80/tanlweb/auth"
 	"akhokhlow80/tanlweb/db"
+	"akhokhlow80/tanlweb/reqencrypt"
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
 	"context"
@@ -25,21 +26,23 @@ import (
 )
 
 type config struct {
-	HTTPBind             string `env:"HTTP_BIND,required"`
-	DBPath               string `env:"DB_PATH,required"`
-	AuthPrivateKey       string `env:"AUTH_PRIV_KEY,required"`
-	BaseURI              string `env:"BASE_URI,required"`
-	LoginTokenLifetime   int    `env:"LOGIN_TOKEN_LIFETIME_SECS,required"`
-	RefreshTokenLifetime int    `env:"REFRESH_TOKEN_LIFETIME_SECS,required"`
-	AccessTokenLifetime  int    `env:"ACCESS_TOKEN_LIFETIME_SECS,required"`
-	DebugMode            bool   `env:"DEBUG_MODE"`
+	HTTPBind                   string `env:"HTTP_BIND,required"`
+	DBPath                     string `env:"DB_PATH,required"`
+	AuthPrivateKey             string `env:"AUTH_PRIV_KEY,required"`
+	BaseURI                    string `env:"BASE_URI,required"`
+	LoginTokenLifetime         int    `env:"LOGIN_TOKEN_LIFETIME_SECS,required"`
+	RefreshTokenLifetime       int    `env:"REFRESH_TOKEN_LIFETIME_SECS,required"`
+	AccessTokenLifetime        int    `env:"ACCESS_TOKEN_LIFETIME_SECS,required"`
+	DebugMode                  bool   `env:"DEBUG_MODE"`
+	RequestKeyRotationInterval int    `env:"REQ_KEY_ROTATION_INTERVAL_SECS,required"`
 }
 
 type app struct {
-	cfg  config
-	db   db.DB
-	tmpl *template.Template
-	auth *auth.Service
+	cfg       config
+	db        db.DB
+	tmpl      *template.Template
+	auth      *auth.Service
+	reqcipher *reqencrypt.Cipher
 }
 
 var (
@@ -77,9 +80,6 @@ func (app *app) initDB(dbPath string) error {
 
 func (app *app) initTmpl() error {
 	templateFuncs := map[string]any{
-		"BaseURI": func() string {
-			return app.cfg.BaseURI
-		},
 		"ShortenUUID": func(uuidStr string) string {
 			if len(uuidStr) > 24 {
 				return uuidStr[24:]
@@ -87,7 +87,13 @@ func (app *app) initTmpl() error {
 				return uuidStr
 			}
 		},
-		"TimeUnix": time.Time.Unix,
+		"EncryptURI": func(pathFormat string, values ...string) string {
+			anyValues := make([]any, len(values))
+			for i, value := range values {
+				anyValues[i] = url.PathEscape(value)
+			}
+			return app.EncryptURI(fmt.Sprintf(pathFormat, anyValues...))
+		},
 	}
 	app.tmpl = template.New("").Funcs(templateFuncs)
 	htmlFS, err := fs.Sub(htmlTemplates, "html")
@@ -127,8 +133,10 @@ func (app *app) cmdListen() error {
 	app.registerAuthHandlers(mux)
 	mux.Handle("/", app.authenticationMiddleware(securedMux))
 
+	handler := reqencrypt.DecryptPathMiddleware(app.reqcipher, web.LogMiddleware(mux))
+
 	log.Printf("Binding to %s", app.cfg.HTTPBind)
-	return http.ListenAndServe(app.cfg.HTTPBind, web.LogMiddleware(mux))
+	return http.ListenAndServe(app.cfg.HTTPBind, handler)
 }
 
 func (app *app) cmdLoginToken(uuid string) error {
@@ -145,7 +153,8 @@ func (app *app) cmdLoginToken(uuid string) error {
 		return err
 	}
 	log.Printf("Issued token for %s (scopes %s)", user.Uuid, user.Scopes)
-	fmt.Printf("%s/login/%s", app.cfg.BaseURI, url.PathEscape(token))
+	fmt.Printf(app.EncryptURI("login/" + url.PathEscape(token)))
+	// fmt.Printf((app.cfg.BaseURI + "/login/" + url.PathEscape(token)))
 	return nil
 }
 
@@ -172,6 +181,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to parse env: %s", err)
 	}
+	app.cfg.BaseURI = strings.TrimSuffix(app.cfg.BaseURI, "/")
 
 	if err = app.initDB(app.cfg.DBPath); err != nil {
 		log.Fatalf("Failed to init DB: %s", err)
@@ -203,6 +213,16 @@ func main() {
 			LifeTime:   time.Duration(app.cfg.AccessTokenLifetime) * time.Second,
 		},
 	)
+
+	reqkeystore := RequestEncryptionKeyStore{&app.db}
+	app.reqcipher, err = reqencrypt.NewCipher(
+		context.Background(),
+		&reqkeystore,
+		time.Duration(app.cfg.RequestKeyRotationInterval)*time.Second,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if len(os.Args) == 1 {
 		log.Fatal(app.cmdListen())

@@ -41,7 +41,19 @@ CREATE TABLE new_peer_requests (
         ON UPDATE CASCADE
 );
 
+CREATE TABLE request_encryption_keys (
+    key0         TEXT,
+    key1         TEXT,
+    rotate_after TIMESTAMP NOT NULL
+);
+INSERT INTO request_encryption_keys (
+    key0,
+    key1,
+    rotate_after
+) VALUES (NULL, NULL, '1970-01-01');
+
 -- +goose Down
 DROP TABLE nodes;
 DROP TABLE users;
 DROP TABLE new_peer_requests;
+DROP TABLE request_encryption_keys;

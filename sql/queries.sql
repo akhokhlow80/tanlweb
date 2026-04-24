@@ -1,3 +1,5 @@
+--- ======= Nodes ======= 
+
 -- name: AddNode :one
 INSERT INTO nodes (
     uuid,
@@ -25,6 +27,8 @@ SELECT * FROM nodes;
 -- name: GetNodeByUUID :one
 SELECT * FROM nodes
 WHERE uuid = @uuid;
+
+--- ======= Users ======= 
 
 -- name: AddUser :one
 INSERT INTO users (
@@ -90,6 +94,8 @@ WHERE
     AND login_token_version = @current_login_version
 RETURNING *;
 
+--- ======= Peer requests ======= 
+
 -- name: CreateNewPeerRequest :exec
 INSERT INTO new_peer_requests (
     uuid,
@@ -140,3 +146,14 @@ UPDATE new_peer_requests SET
 WHERE
     uuid = @uuid
 RETURNING *;
+
+--- ======= Request encryption keys ======= 
+
+-- name: GetRequestEncryptionKeys :one
+SELECT * FROM request_encryption_keys LIMIT 1;
+
+-- name: UpdateRequestEncryptionKeys :execrows
+UPDATE request_encryption_keys SET
+    key0 = @key0,
+    key1 = @key1,
+    rotate_after = @rotate_after;

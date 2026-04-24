@@ -9,9 +9,9 @@
     id="user-config-form"
     hx-swap="none"
     {{if .UUID}}
-      hx-put="{{BaseURI}}/users/{{.UUID}}"
+      hx-put='{{EncryptURI "users/%s" .UUID}}'
     {{else}}
-      hx-post="{{BaseURI}}/users"
+      hx-post='{{EncryptURI "users"}}'
     {{end}}
     hx-disabled-elt="find input[type='submit']"
   >
@@ -64,7 +64,7 @@
     <form
       id="user-paid-until-form"
       hx-swap="none"
-      hx-put="{{BaseURI}}/users/{{.UUID}}/paid-until"
+      hx-put='{{EncryptURI "users/%s/paid-until" .UUID}}'
       hx-disabled-elt="find input[type='submit']"
     >
       <div id="user-paid-until-container" class="field">
@@ -92,7 +92,7 @@
     <form
       id="user-status-form"
       hx-swap="none"
-      hx-put="{{BaseURI}}/users/{{.UUID}}/ban"
+      hx-put='{{EncryptURI "users/%s/ban" .UUID}}'
       hx-disabled-elt="find input[type='submit']"
     >
       <div id="user-status-container" class="field">
@@ -123,8 +123,7 @@
     <hr>
 
     {{if .UUID}}
-      <form action="{{BaseURI}}/peers/new" method="get">
-        <input name="user-uuid" type="hidden" value="{{.UUID}}">
+      <form action='{{EncryptURI "users/%s/peers/new" .UUID}}' method="get">
         <input type="submit" class="add-new" value="+ Add new peer" />
       </form>
 

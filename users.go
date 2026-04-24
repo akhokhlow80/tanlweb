@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -130,7 +131,7 @@ func (app *app) putUser(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 
-		w.Header().Add("HX-Replace-Url", fmt.Sprintf("%s/users/%s", app.cfg.BaseURI, dbUser.Uuid))
+		w.Header().Add("HX-Replace-Url", app.EncryptURI("users/"+url.PathEscape(dbUser.Uuid)))
 	} else {
 		dbUser, err = func() (sqlgen.User, error) {
 			defer app.db.Unlock()

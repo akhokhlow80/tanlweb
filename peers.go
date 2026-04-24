@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"time"
 
@@ -19,24 +20,12 @@ import (
 // TODO: handle config request
 
 func (app *app) registerPeerHandlers(m *http.ServeMux) {
-	m.HandleFunc("GET /peers/new", web.FailableHandler(app.StandardErrorHandler, app.newPeerPage))
+	m.HandleFunc("GET /users/{user_uuid}/peers/new", web.FailableHandler(app.StandardErrorHandler, app.newPeerPage))
 	m.HandleFunc("GET /peers", web.FailableHandler(app.StandardErrorHandler, app.peersList))
 	m.HandleFunc("POST /peers", web.FailableHandler(app.HTMXErrorHandler, app.addPeer))
-	// m.HandleFunc("GET /peers/{public_key}", web.FailableHandler(app.StandardErrorHandler, app.peersList))
 	m.HandleFunc("GET /peers/requests/{uuid}", web.FailableHandler(app.StandardErrorHandler, app.newPeerRequest))
 	m.HandleFunc("POST /peers/requests/{uuid}/cancel", web.FailableHandler(app.StandardErrorHandler, app.cancelNewPeerRequest))
-	// m.HandleFunc("POST /peers/requests/{uuid}/config", web.FailableHandler(app.StandardErrorHandler, app.retrievePendingPeerConfig))
 }
-
-// type peerView struct {
-// 	PublicKey string
-// 	Endpoint  string
-// 	OwnerUUID string
-// 	Node      struct {
-// 		UUID string
-// 		Name string
-// 	}
-// }
 
 type newPeerNodeSelectOption struct {
 	UUID string
@@ -53,10 +42,7 @@ func (app *app) newPeerPage(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	userUUID, err := uuid.Parse(r.URL.Query().Get("user-uuid"))
-	if err != nil {
-		return ErrParseForm
-	}
+	userUUID := r.PathValue("user_uuid")
 
 	dbNodes, err := func() ([]sqlgen.Node, error) {
 		defer app.db.Unlock()
@@ -75,7 +61,7 @@ func (app *app) newPeerPage(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return app.tmpl.ExecuteTemplate(w, "peers/new", newPeerPageView{
-		UserUUID: userUUID.String(),
+		UserUUID: userUUID,
 		Nodes:    nodes,
 	})
 }
@@ -143,44 +129,9 @@ func (app *app) addPeer(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	w.Header().Set("HX-Redirect", fmt.Sprintf("%s/peers/requests/%s", app.cfg.BaseURI, uuid.String()))
+	w.Header().Set("HX-Redirect", app.EncryptURI("peers/requests/"+url.PathEscape(uuid.String())))
 
 	return nil
-}
-
-func parsePeerRequestFromDB(row *sqlgen.GetNewPeerRequestsRow) (peers.PeerRequest, error) {
-	var status peers.PeerRequestStatus
-	switch row.Status {
-	case string(peers.Pending):
-	case string(peers.ConfigRequested):
-	case string(peers.Created):
-	case string(peers.Cancelled):
-		status = peers.PeerRequestStatus(row.Status)
-	default:
-		return peers.PeerRequest{},
-			fmt.Errorf("Unknown status `%s` while parsing new peer request %s from DB", row.Status, row.Uuid)
-	}
-
-	var requestedByUserUUID string
-	if row.RequestedByUserUuid != nil {
-		requestedByUserUUID = *row.RequestedByUserUuid
-	}
-
-	return peers.PeerRequest{
-		UUID:   row.Uuid,
-		Status: status,
-		Sensitive: struct {
-			InterfaceName       string
-			RequestedAt         time.Time
-			RequestedByUserUUID string
-		}{
-			InterfaceName:       row.InterfaceName,
-			RequestedAt:         row.RequestedAt,
-			RequestedByUserUUID: requestedByUserUUID,
-		},
-		NodeUUID:  row.NodeUuid,
-		OwnerUUID: row.OwnedByUserUuid,
-	}, nil
 }
 
 type newPeerRequestView struct {

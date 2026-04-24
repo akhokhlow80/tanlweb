@@ -9,9 +9,9 @@
     id="node-config-form"
     hx-swap="none"
     {{if .UUID}}
-      hx-put="{{BaseURI}}/nodes/{{.UUID}}"
+      hx-put='{{EncryptURI "nodes/%s" .UUID}}'
     {{else}}
-      hx-post="{{BaseURI}}/nodes"
+      hx-post='{{EncryptURI "nodes"}}'
     {{end}}
     hx-disabled-elt="find input[type='submit']"
   >

@@ -15,13 +15,13 @@
       <tbody>
         {{range .}}
           <tr>
-            <td><a href="{{BaseURI}}/nodes/{{.UUID}}">{{.Name}}</a></td>
+            <td><a href='{{EncryptURI "nodes/%s" .UUID}}'>{{.Name}}</a></td>
             <td>{{.BaseURI}}</td>
           </tr>
         {{end}}
       </tbody>
     </table>
-    <form action="{{BaseURI}}/nodes/new" method="get">
+    <form action='{{EncryptURI "nodes/new"}}' method="get">
       <input type="submit" class="add-new" value="+ Add new" />
     </form>
   </body>

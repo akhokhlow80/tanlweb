@@ -7,11 +7,11 @@
     <div id="notifications-container"></div>
     {{template "navigation" "peers"}}
 
-    <h2>Add new peer for user <a href="{{BaseURI}}/users/{{.UserUUID}}">{{slice .UserUUID 24}}</a></h2>
+    <h2>Add new peer for user <a href='{{EncryptURI "users/%s" .UserUUID}}'>{{slice .UserUUID 24}}</a></h2>
 
     <main>
       <form
-        hx-post="{{BaseURI}}/peers"
+        hx-post='{{EncryptURI "peers"}}'
         hx-swap="none"
         hx-disabled-elt="find input[type='submit']"
       >

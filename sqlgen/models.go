@@ -26,6 +26,12 @@ type Node struct {
 	BaseUri string
 }
 
+type RequestEncryptionKey struct {
+	Key0        *string
+	Key1        *string
+	RotateAfter time.Time
+}
+
 type User struct {
 	ID                  int64
 	Uuid                string

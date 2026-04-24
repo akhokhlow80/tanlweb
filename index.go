@@ -2,7 +2,6 @@ package main
 
 import (
 	"akhokhlow80/tanlweb/web"
-	"fmt"
 	"net/http"
 )
 
@@ -13,15 +12,15 @@ func (app *app) registerIndexPage(m *http.ServeMux) {
 func (app *app) indexPageHandler(w http.ResponseWriter, r *http.Request) error {
 	user := getAuthenticateUser(r.Context())
 	if user.Scopes.Peers {
-		w.Header().Set("Location", fmt.Sprintf("%s/peers", app.cfg.BaseURI))
+		w.Header().Set("Location", app.EncryptURI("peers"))
 		w.WriteHeader(http.StatusSeeOther)
 		return nil
 	} else if user.Scopes.Users {
-		w.Header().Set("Location", fmt.Sprintf("%s/users", app.cfg.BaseURI))
+		w.Header().Set("Location", app.EncryptURI("users"))
 		w.WriteHeader(http.StatusSeeOther)
 		return nil
 	} else if user.Scopes.Nodes {
-		w.Header().Set("Location", fmt.Sprintf("%s/nodes", app.cfg.BaseURI))
+		w.Header().Set("Location", app.EncryptURI("nodes"))
 		w.WriteHeader(http.StatusSeeOther)
 		return nil
 	} else {

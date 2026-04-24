@@ -11,6 +11,7 @@ import (
 )
 
 const addNode = `-- name: AddNode :one
+
 INSERT INTO nodes (
     uuid,
     name,
@@ -28,6 +29,7 @@ type AddNodeParams struct {
 	BaseUri string
 }
 
+// - ======= Nodes =======
 func (q *Queries) AddNode(ctx context.Context, arg AddNodeParams) (Node, error) {
 	row := q.db.QueryRowContext(ctx, addNode, arg.Uuid, arg.Name, arg.BaseUri)
 	var i Node
@@ -41,6 +43,7 @@ func (q *Queries) AddNode(ctx context.Context, arg AddNodeParams) (Node, error) 
 }
 
 const addUser = `-- name: AddUser :one
+
 INSERT INTO users (
     uuid,
     description,
@@ -63,6 +66,7 @@ type AddUserParams struct {
 	Fee         string
 }
 
+// - ======= Users =======
 func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, addUser,
 		arg.Uuid,
@@ -139,6 +143,7 @@ func (q *Queries) CancelNewPeerRequest(ctx context.Context, uuid string) (NewPee
 }
 
 const createNewPeerRequest = `-- name: CreateNewPeerRequest :exec
+
 INSERT INTO new_peer_requests (
     uuid,
     interface_name,
@@ -165,6 +170,7 @@ type CreateNewPeerRequestParams struct {
 	OwnedByUserID       int64
 }
 
+// - ======= Peer requests =======
 func (q *Queries) CreateNewPeerRequest(ctx context.Context, arg CreateNewPeerRequestParams) error {
 	_, err := q.db.ExecContext(ctx, createNewPeerRequest,
 		arg.Uuid,
@@ -291,6 +297,19 @@ func (q *Queries) GetNodes(ctx context.Context) ([]Node, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const getRequestEncryptionKeys = `-- name: GetRequestEncryptionKeys :one
+
+SELECT key0, key1, rotate_after FROM request_encryption_keys LIMIT 1
+`
+
+// - ======= Request encryption keys =======
+func (q *Queries) GetRequestEncryptionKeys(ctx context.Context) (RequestEncryptionKey, error) {
+	row := q.db.QueryRowContext(ctx, getRequestEncryptionKeys)
+	var i RequestEncryptionKey
+	err := row.Scan(&i.Key0, &i.Key1, &i.RotateAfter)
+	return i, err
 }
 
 const getUser = `-- name: GetUser :one
@@ -501,6 +520,27 @@ func (q *Queries) UpdateNode(ctx context.Context, arg UpdateNodeParams) (Node, e
 		&i.BaseUri,
 	)
 	return i, err
+}
+
+const updateRequestEncryptionKeys = `-- name: UpdateRequestEncryptionKeys :execrows
+UPDATE request_encryption_keys SET
+    key0 = ?1,
+    key1 = ?2,
+    rotate_after = ?3
+`
+
+type UpdateRequestEncryptionKeysParams struct {
+	Key0        *string
+	Key1        *string
+	RotateAfter time.Time
+}
+
+func (q *Queries) UpdateRequestEncryptionKeys(ctx context.Context, arg UpdateRequestEncryptionKeysParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateRequestEncryptionKeys, arg.Key0, arg.Key1, arg.RotateAfter)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const updateUser = `-- name: UpdateUser :one

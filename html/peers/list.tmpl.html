@@ -24,20 +24,20 @@
             {{range .NewRequests}}
               <tr>
                 <td>
-                  <a href="{{BaseURI}}/peers/requests/{{.UUID}}">{{ShortenUUID .UUID}}</a>
+                  <a href='{{EncryptURI "peers/requests/%s" .UUID}}'>{{ShortenUUID .UUID}}</a>
                 </td>
                 <td>
-                  <a href="{{BaseURI}}/users/{{.OwnedByUserUUID}}">{{ShortenUUID .OwnedByUserUUID}}</a>
+                  <a href='{{EncryptURI "users/%s" .OwnedByUserUUID}}'>{{ShortenUUID .OwnedByUserUUID}}</a>
                 </td>
                 <td>
                   {{if not .Status.Completed}}
-                    <a href="{{BaseURI}}/users/{{.RequestedByUserUUID}}">
+                    <a href='{{EncryptURI "users/%s" .RequestedByUserUUID}}'>
                       {{ShortenUUID .RequestedByUserUUID}}
                     </a>
                   {{end}}
                 </td>
                 <td>
-                  <a href="{{BaseURI}}/nodes/{{.NodeUUID}}">{{.NodeName}}</a>
+                  <a href='{{EncryptURI "nodes/%s" .NodeUUID}}'>{{.NodeName}}</a>
                 </td>
                   {{if not .Status.Completed}}
                     <td

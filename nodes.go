@@ -7,8 +7,8 @@ import (
 	"akhokhlow80/tanlweb/web"
 	"database/sql"
 	"errors"
-	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/google/uuid"
 )
@@ -101,7 +101,7 @@ func (app *app) putNode(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 
-		w.Header().Add("HX-Replace-Url", fmt.Sprintf("%s/nodes/%s", app.cfg.BaseURI, dbNode.Uuid))
+		w.Header().Add("HX-Replace-Url", app.EncryptURI("nodes/"+url.PathEscape(dbNode.Uuid)))
 	} else {
 		dbNode, err = func() (sqlgen.Node, error) {
 			defer app.db.Unlock()

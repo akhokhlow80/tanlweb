@@ -13,11 +13,11 @@
   <div class="fields-container">
     <div class="field">
       <p class="name">Node:</p>
-      <a href="{{BaseURI}}/nodes/{{.NodeUUID}}">{{.NodeName}}</a>
+      <a href='{{EncryptURI "nodes/%s" .NodeUUID}}'>{{.NodeName}}</a>
     </div>
     <div class="field">
       <p class="name">For user:</p>
-      <a href="{{BaseURI}}/users/{{.OwnedByUserUUID}}">{{ShortenUUID .OwnedByUserUUID}}</a>
+      <a href='{{EncryptURI "users/%s" .OwnedByUserUUID}}'>{{ShortenUUID .OwnedByUserUUID}}</a>
     </div>
     {{if not .Status.Completed}}
       <div class="field">
@@ -28,7 +28,7 @@
       </div>
       <div class="field">
         <p class="name">Requested by:</p>
-        <a href="{{BaseURI}}/users/{{.RequestedByUserUUID}}">{{ShortenUUID .RequestedByUserUUID}}</a>
+        <a href='{{EncryptURI "users/%s" .RequestedByUserUUID}}'>{{ShortenUUID .RequestedByUserUUID}}</a>
       </div>
       <div class="field">
         <p class="name">Config name:</p>
@@ -53,12 +53,12 @@
         id="config-url-container"
       >
         <p id="config-url-label">Link for user to get the config (click to copy):</p>
-        <pre id="config-url" class="inline">{{BaseURI}}/configs/{{.UUID}}</pre>
+        <pre id="config-url" class="inline">{{EncryptURI "configs/%s" .UUID}}</pre>
       </div>
 
       <form
         hx-swap="none"
-        hx-post="{{BaseURI}}/peers/requests/{{.UUID}}/cancel"
+        hx-post='{{EncryptURI "peers/requests/%s/cancel" .UUID}}'
         hx-disabled-elt="find input[type='submit']">
         <input type="submit" value="Cancel">
       </form>
