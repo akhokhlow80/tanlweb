@@ -53,14 +53,14 @@ func TestEncryption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
-	const plaintext = "some%20path/123"
+	const plaintext = "some/text"
 	enc := cipher.Encrypt(plaintext)
 	dec, ok := cipher.Decrypt(enc)
 	if !ok {
 		t.Fatalf("Unexpected failure of the decryption")
 	}
 	if plaintext != dec {
-		t.Fatalf("Plaintext doesn't match encrypted URL")
+		t.Fatalf("Plaintext doesn't match encrypted")
 	}
 }
 
@@ -69,7 +69,7 @@ func testURL(t *testing.T, c *reqencrypt.Cipher, host string, path string) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
-	enc := host + "/" + url.PathEscape(c.Encrypt(path))
+	enc := host + "/" + reqencrypt.EncryptForURL(c, path)
 	encURL, err := url.Parse(enc)
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
@@ -257,14 +257,14 @@ func TestStoreWithExistingKeys(t *testing.T) {
 			t.Fatalf("Unexpected error: %s", err)
 		}
 
-		const plaintext = "some%20path/123"
+		const plaintext = "someplaintext"
 		enc := cipher.Encrypt(plaintext)
 		dec, ok := cipher.Decrypt(enc)
 		if !ok {
 			t.Fatalf("Unexpected failure of the decryption")
 		}
 		if plaintext != dec {
-			t.Fatalf("Plaintext doesn't match encrypted URL")
+			t.Fatalf("Plaintext doesn't match encrypted")
 		}
 	})
 	t.Run("2 keys", func(t *testing.T) {
@@ -281,14 +281,14 @@ func TestStoreWithExistingKeys(t *testing.T) {
 			t.Fatalf("Unexpected error: %s", err)
 		}
 
-		const plaintext = "some%20path/123"
+		const plaintext = "someplaintext"
 		enc := cipher.Encrypt(plaintext)
 		dec, ok := cipher.Decrypt(enc)
 		if !ok {
 			t.Fatalf("Unexpected failure of the decryption")
 		}
 		if plaintext != dec {
-			t.Fatalf("Plaintext doesn't match encrypted URL")
+			t.Fatalf("Plaintext doesn't match encrypted")
 		}
 	})
 }
@@ -299,7 +299,7 @@ func TestMiddleware(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
-	uri := "https://localhost:1234/" + cipher.Encrypt("ping?value=abc123")
+	uri := "https://localhost:1234/" + reqencrypt.EncryptForURL(cipher, "ping?value=abc123")
 	req := httptest.NewRequest("POST", uri, bytes.NewBufferString("hello"))
 
 	handler := func(w http.ResponseWriter, r *http.Request) {

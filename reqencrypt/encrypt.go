@@ -128,6 +128,11 @@ func (c *Cipher) Encrypt(path string) string {
 	return base64.StdEncoding.EncodeToString(encrypted)
 }
 
+func EncryptForURL(c *Cipher, path string) string {
+	encrypted := c.Encrypt(path)
+	return url.PathEscape(encrypted)
+}
+
 func (c *Cipher) Decrypt(encryptedPathBase64 string) (string, bool) {
 	encryptedPath, err := base64.StdEncoding.DecodeString(encryptedPathBase64)
 	if err != nil {
@@ -166,9 +171,7 @@ func (c *Cipher) Decrypt(encryptedPathBase64 string) (string, bool) {
 
 // Returns nil on decryption and parsing failures.
 func DecryptURL(c *Cipher, u *url.URL) *url.URL {
-	path := strings.TrimLeftFunc(u.Path, func(r rune) bool {
-		return r == '/'
-	})
+	path := strings.TrimPrefix(u.Path, "/")
 	decryptedRawPath, ok := c.Decrypt(path)
 	if !ok {
 		return nil
