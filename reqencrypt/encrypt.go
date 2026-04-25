@@ -82,7 +82,6 @@ func NewCipher(ctx context.Context, store KeyStore, rotateInterval time.Duration
 		return nil, err
 	}
 	c := &Cipher{store: store}
-
 	if keys.Keys[0] != nil && time.Now().Before(keys.RotateAfter) {
 		// If has key and pair is not expired, then just make aead.Cipher
 		c.aead[0], err = chacha20poly1305.NewX(keys.Keys[0][:])
@@ -112,29 +111,25 @@ func padded(n int, blkSize int) int {
 	return n + (blkSize-(n&(blkSize-1)))&(blkSize-1)
 }
 
-func (c *Cipher) Encrypt(path string) string {
+// Returns base64 raw url encoded (no padding) XChaCha20-Poly1305 encrypted path.
+func (c *Cipher) Encrypt(log2Padding uint, path string) string {
 	defer c.RUnlock()
 	c.RLock()
 
-	pathPadded := make([]byte, padded(len(path), 512))
+	padding := 1 << log2Padding
+	pathPadded := make([]byte, padded(len(path), padding))
 	copy(pathPadded, path)
 
 	sealed := make([]byte, 0, c.aead[0].NonceSize()+len(path)+c.aead[0].Overhead())
 	nonce := sealed[:c.aead[0].NonceSize()]
 	rand.Read(nonce)
 
-	encrypted := c.aead[0].Seal(nonce, nonce, pathPadded, nil)
-
-	return base64.StdEncoding.EncodeToString(encrypted)
+	return base64.RawURLEncoding.EncodeToString(c.aead[0].Seal(nonce, nonce, pathPadded, nil))
 }
 
-func EncryptForURL(c *Cipher, path string) string {
-	encrypted := c.Encrypt(path)
-	return url.PathEscape(encrypted)
-}
-
-func (c *Cipher) Decrypt(encryptedPathBase64 string) (string, bool) {
-	encryptedPath, err := base64.StdEncoding.DecodeString(encryptedPathBase64)
+// Decrypts base64 raw url encoded (no padding) XChaCha20-Poly1305 ciphertext.
+func (c *Cipher) Decrypt(ciphertextBase64 string) (string, bool) {
+	ciphertext, err := base64.RawURLEncoding.DecodeString(ciphertextBase64)
 	if err != nil {
 		return "", false
 	}
@@ -146,11 +141,11 @@ func (c *Cipher) Decrypt(encryptedPathBase64 string) (string, bool) {
 		if aead == nil {
 			continue
 		}
-		if len(encryptedPath) < aead.NonceSize() {
+		if len(ciphertext) < aead.NonceSize() {
 			return "", false
 		}
-		nonce := encryptedPath[:aead.NonceSize()]
-		ciphertext := encryptedPath[aead.NonceSize():]
+		nonce := ciphertext[:aead.NonceSize()]
+		ciphertext := ciphertext[aead.NonceSize():]
 		path, err := aead.Open(nil, nonce, ciphertext, nil)
 		if err != nil {
 			continue
@@ -176,9 +171,6 @@ func DecryptURL(c *Cipher, u *url.URL) *url.URL {
 	if !ok {
 		return nil
 	}
-	// decryptedRawPath = strings.TrimLeftFunc(decryptedRawPath, func(r rune) bool {
-	// 	return r == '/'
-	// })
 	decryptedPathURI, err := url.ParseRequestURI("/" + decryptedRawPath)
 	if err != nil {
 		return nil

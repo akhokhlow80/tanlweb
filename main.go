@@ -42,7 +42,7 @@ type app struct {
 	db        db.DB
 	tmpl      *template.Template
 	auth      *auth.Service
-	reqcipher *reqencrypt.Cipher
+	reqCipher *reqencrypt.Cipher
 }
 
 var (
@@ -133,7 +133,7 @@ func (app *app) cmdListen() error {
 	app.registerAuthHandlers(mux)
 	mux.Handle("/", app.authenticationMiddleware(securedMux))
 
-	handler := reqencrypt.DecryptPathMiddleware(app.reqcipher, web.LogMiddleware(mux))
+	handler := reqencrypt.DecryptPathMiddleware(app.reqCipher, web.LogMiddleware(mux))
 
 	log.Printf("Binding to %s", app.cfg.HTTPBind)
 	return http.ListenAndServe(app.cfg.HTTPBind, handler)
@@ -214,7 +214,7 @@ func main() {
 	)
 
 	reqkeystore := RequestEncryptionKeyStore{&app.db}
-	app.reqcipher, err = reqencrypt.NewCipher(
+	app.reqCipher, err = reqencrypt.NewCipher(
 		context.Background(),
 		&reqkeystore,
 		time.Duration(app.cfg.RequestKeyRotationInterval)*time.Second,

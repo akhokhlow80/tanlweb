@@ -69,5 +69,5 @@ func (r *RequestEncryptionKeyStore) PutKeys(ctx context.Context, keys *reqencryp
 }
 
 func (app *app) EncryptURI(path string) string {
-	return fmt.Sprintf("%s/%s", app.cfg.BaseURI, reqencrypt.EncryptForURL(app.reqcipher, path))
+	return fmt.Sprintf("%s/%s", app.cfg.BaseURI, app.reqCipher.Encrypt(9 /* 512 */, path))
 }

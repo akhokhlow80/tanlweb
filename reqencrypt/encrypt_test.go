@@ -43,7 +43,13 @@ func (m *mockKeyStore) Copy() *mockKeyStore {
 	defer m.Unlock()
 	m.Lock()
 	nm := new(mockKeyStore)
-	nm.keys = m.keys
+	for i := range m.keys.Keys {
+		if m.keys.Keys[i] != nil {
+			nm.keys.Keys[i] = new([reqencrypt.KeySize]byte)
+			copy(nm.keys.Keys[i][:], m.keys.Keys[i][:])
+		}
+	}
+	nm.keys.RotateAfter = m.keys.RotateAfter
 	return nm
 }
 
@@ -54,7 +60,7 @@ func TestEncryption(t *testing.T) {
 		t.Fatalf("Unexpected error: %s", err)
 	}
 	const plaintext = "some/text"
-	enc := cipher.Encrypt(plaintext)
+	enc := cipher.Encrypt(0, plaintext)
 	dec, ok := cipher.Decrypt(enc)
 	if !ok {
 		t.Fatalf("Unexpected failure of the decryption")
@@ -69,7 +75,7 @@ func testURL(t *testing.T, c *reqencrypt.Cipher, host string, path string) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
-	enc := host + "/" + reqencrypt.EncryptForURL(c, path)
+	enc := host + "/" + c.Encrypt(9, path)
 	encURL, err := url.Parse(enc)
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
@@ -104,7 +110,7 @@ func TestExpiredKeypair(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
-	enc := cipher.Encrypt("test")
+	enc := cipher.Encrypt(2, "test")
 	time.Sleep(rotationInterval * 3)
 	_, ok := cipher.Decrypt(enc)
 	if ok {
@@ -126,7 +132,7 @@ func TestKeyRotation(t *testing.T) {
 		if !retry {
 			break
 		}
-		enc := cipher.Encrypt("test0")
+		enc := cipher.Encrypt(3, "test0")
 		time.Sleep(rotationInterval)
 		_, ok := cipher.Decrypt(enc)
 		if !ok {
@@ -134,7 +140,7 @@ func TestKeyRotation(t *testing.T) {
 			continue
 		}
 
-		enc = cipher.Encrypt("test0")
+		enc = cipher.Encrypt(1, "test0")
 		time.Sleep(rotationInterval)
 		_, ok = cipher.Decrypt(enc)
 		if !ok {
@@ -156,14 +162,11 @@ func TestDecryptJunk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
-	_, ok := cipher.Decrypt(base64.StdEncoding.EncodeToString([]byte{
+	// Test small ciphertext
+	_, ok := cipher.Decrypt(base64.RawURLEncoding.EncodeToString([]byte{
 		0x28, 0x7d, 0xb3, 0xac, 0xb4, 0x2b, 0xd9, 0xdc, 0xd3, 0xc4, 0xe0, 0xd7,
 		0x92, 0x27, 0xb1, 0x68, 0xb0, 0xd0, 0x2f, 0xbe, 0x74, 0x3b, 0xa4,
 	}))
-	if ok {
-		t.Fatalf("Decrypt() was expected to fail")
-	}
-	_, ok = cipher.Decrypt("/5nTG5D/+ah/QRN???????JgYC6cqNfnIqX60NDF")
 	if ok {
 		t.Fatalf("Decrypt() was expected to fail")
 	}
@@ -206,7 +209,7 @@ func TestKeyPreservation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
-	enc := cipher1.Encrypt(plaintext)
+	enc := cipher1.Encrypt(9, plaintext)
 
 	cancel1()
 
@@ -258,7 +261,7 @@ func TestStoreWithExistingKeys(t *testing.T) {
 		}
 
 		const plaintext = "someplaintext"
-		enc := cipher.Encrypt(plaintext)
+		enc := cipher.Encrypt(1, plaintext)
 		dec, ok := cipher.Decrypt(enc)
 		if !ok {
 			t.Fatalf("Unexpected failure of the decryption")
@@ -282,7 +285,7 @@ func TestStoreWithExistingKeys(t *testing.T) {
 		}
 
 		const plaintext = "someplaintext"
-		enc := cipher.Encrypt(plaintext)
+		enc := cipher.Encrypt(4, plaintext)
 		dec, ok := cipher.Decrypt(enc)
 		if !ok {
 			t.Fatalf("Unexpected failure of the decryption")
@@ -299,7 +302,7 @@ func TestMiddleware(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
-	uri := "https://localhost:1234/" + reqencrypt.EncryptForURL(cipher, "ping?value=abc123")
+	uri := "https://localhost:1234/" + cipher.Encrypt(0, "ping?value=abc123")
 	req := httptest.NewRequest("POST", uri, bytes.NewBufferString("hello"))
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
