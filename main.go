@@ -153,8 +153,7 @@ func (app *app) cmdLoginToken(uuid string) error {
 		return err
 	}
 	log.Printf("Issued token for %s (scopes %s)", user.Uuid, user.Scopes)
-	fmt.Printf(app.EncryptURI("login/" + url.PathEscape(token)))
-	// fmt.Printf((app.cfg.BaseURI + "/login/" + url.PathEscape(token)))
+	fmt.Println(app.EncryptURI("login/" + url.PathEscape(token)))
 	return nil
 }
 
