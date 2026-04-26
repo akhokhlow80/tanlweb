@@ -1,7 +1,7 @@
-package main
+package admin
 
 import (
-	"akhokhlow80/tanlweb/auth"
+	"akhokhlow80/tanlweb/admin/auth"
 	"akhokhlow80/tanlweb/db"
 	"akhokhlow80/tanlweb/reqlog"
 	"akhokhlow80/tanlweb/sqlgen"
@@ -13,16 +13,16 @@ import (
 	"net/http"
 )
 
-func (app *app) registerAuthHandlers(m *http.ServeMux) {
-	m.HandleFunc("/login/{token}", web.FailableHandler(app.StandardErrorHandler, app.loginHandler))
+func (app *App) registerAuthHandlers(m *http.ServeMux) {
+	m.HandleFunc("/login/{token}", web.FailableHandler(app.standardErrorHandler, app.loginHandler))
 }
 
-func (app *app) loginHandler(w http.ResponseWriter, r *http.Request) error {
+func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) error {
 	token := r.PathValue("token")
 	refreshToken, err := app.auth.LoginForRefreshToken(r.Context(), token)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidToken) || errors.Is(err, auth.ErrSubjectNotFound) {
-			return ErrUnauthorized
+			return errUnauthorized
 		} else {
 			return err
 		}
@@ -47,7 +47,7 @@ func (app *app) loginHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 	http.SetCookie(w, &refreshCookie)
 	http.SetCookie(w, &accessCookie)
-	w.Header().Set("Location", app.EncryptURI(""))
+	w.Header().Set("Location", app.encryptURI(""))
 	w.WriteHeader(http.StatusSeeOther)
 	return nil
 }
@@ -165,19 +165,19 @@ func (repo *subjectsRepo) GetAndUpdateForLogin(ctx context.Context, subID string
 	}, err
 }
 
-func (app *app) authenticate(w http.ResponseWriter, r *http.Request) (auth.Subject, error) {
+func (app *App) authenticate(w http.ResponseWriter, r *http.Request) (auth.Subject, error) {
 	accessTokenCookie, err := r.Cookie("access_token")
 	if err != nil {
-		return auth.Subject{}, ErrUnauthorized
+		return auth.Subject{}, errUnauthorized
 	}
 	refreshTokenCookie, err := r.Cookie("refresh_token")
 	if err != nil {
-		return auth.Subject{}, ErrUnauthorized
+		return auth.Subject{}, errUnauthorized
 	}
 	newAccessToken, sub, err := app.auth.Authenticate(r.Context(), accessTokenCookie.Value, refreshTokenCookie.Value)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidToken) || errors.Is(err, auth.ErrSubjectNotFound) {
-			return auth.Subject{}, ErrUnauthorized
+			return auth.Subject{}, errUnauthorized
 		} else {
 			return auth.Subject{}, err
 		}
@@ -197,11 +197,11 @@ func (app *app) authenticate(w http.ResponseWriter, r *http.Request) (auth.Subje
 
 type authenticatedUserCtxKey struct{}
 
-func (app *app) authenticationMiddleware(h http.Handler) http.Handler {
+func (app *App) authenticationMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sub, err := app.authenticate(w, r)
 		if err != nil {
-			if errors.Is(err, ErrUnauthorized) {
+			if errors.Is(err, errUnauthorized) {
 				http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
 				return
 			} else {
@@ -228,11 +228,11 @@ func getAuthenticateUser(ctx context.Context) *auth.Subject {
 func authorize(ctx context.Context, requiredScopes *auth.Scopes) error {
 	subject := getAuthenticateUser(ctx)
 	if subject == nil {
-		return ErrUnauthorized
+		return errUnauthorized
 	}
 
 	if !subject.Scopes.MatchRequired(requiredScopes) {
-		return ErrForbidden
+		return errForbidden
 	} else {
 		return nil
 	}

@@ -1,7 +1,7 @@
-package main
+package admin
 
 import (
-	"akhokhlow80/tanlweb/auth"
+	"akhokhlow80/tanlweb/admin/auth"
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
 	"context"
@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (app *app) addRootUserIfNotExists(ctx context.Context) error {
+func (app *App) addRootUserIfNotExists(ctx context.Context) error {
 	defer app.db.RUnlock()
 	app.db.RLock()
 
@@ -38,14 +38,14 @@ func (app *app) addRootUserIfNotExists(ctx context.Context) error {
 	return nil
 }
 
-func (app *app) registerUsersHandlers(m *http.ServeMux) {
-	m.HandleFunc("GET /users/new", web.FailableHandler(app.StandardErrorHandler, app.newUserPage))
-	m.HandleFunc("POST /users", web.FailableHandler(app.HTMXErrorHandler, app.putUser))
-	m.HandleFunc("PUT /users/{uuid}", web.FailableHandler(app.HTMXErrorHandler, app.putUser))
-	m.HandleFunc("PUT /users/{uuid}/paid-until", web.FailableHandler(app.HTMXErrorHandler, app.putUserPaidUntil))
-	m.HandleFunc("PUT /users/{uuid}/ban", web.FailableHandler(app.HTMXErrorHandler, app.putUserBan))
-	m.HandleFunc("GET /users/{uuid}", web.FailableHandler(app.StandardErrorHandler, app.userPage))
-	m.HandleFunc("GET /users", web.FailableHandler(app.StandardErrorHandler, app.usersList))
+func (app *App) registerUsersHandlers(m *http.ServeMux) {
+	m.HandleFunc("GET /users/new", web.FailableHandler(app.standardErrorHandler, app.newUserPage))
+	m.HandleFunc("POST /users", web.FailableHandler(app.htmxErrorHandler, app.putUser))
+	m.HandleFunc("PUT /users/{uuid}", web.FailableHandler(app.htmxErrorHandler, app.putUser))
+	m.HandleFunc("PUT /users/{uuid}/paid-until", web.FailableHandler(app.htmxErrorHandler, app.putUserPaidUntil))
+	m.HandleFunc("PUT /users/{uuid}/ban", web.FailableHandler(app.htmxErrorHandler, app.putUserBan))
+	m.HandleFunc("GET /users/{uuid}", web.FailableHandler(app.standardErrorHandler, app.userPage))
+	m.HandleFunc("GET /users", web.FailableHandler(app.standardErrorHandler, app.usersList))
 }
 
 type userView struct {
@@ -76,7 +76,7 @@ func userViewFromDB(dbUser *sqlgen.User) userView {
 	}
 }
 
-func (app *app) newUserPage(w http.ResponseWriter, r *http.Request) error {
+func (app *App) newUserPage(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
 		return err
 	}
@@ -84,9 +84,9 @@ func (app *app) newUserPage(w http.ResponseWriter, r *http.Request) error {
 	return app.tmpl.ExecuteTemplate(w, "users/page", nil)
 }
 
-func (app *app) putUser(w http.ResponseWriter, r *http.Request) error {
+func (app *App) putUser(w http.ResponseWriter, r *http.Request) error {
 	if err := r.ParseForm(); err != nil {
-		return ErrParseForm
+		return errParseForm
 	}
 
 	addNew := r.Method == "POST"
@@ -127,11 +127,11 @@ func (app *app) putUser(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 
-		if err := app.RenderNotification(w, Notification{Ok: true, Message: "Created"}); err != nil {
+		if err := app.renderNotification(w, notification{Ok: true, Message: "Created"}); err != nil {
 			return err
 		}
 
-		w.Header().Add("HX-Replace-Url", app.EncryptURI("users/"+url.PathEscape(dbUser.Uuid)))
+		w.Header().Add("HX-Replace-Url", app.encryptURI("users/"+url.PathEscape(dbUser.Uuid)))
 	} else {
 		dbUser, err = func() (sqlgen.User, error) {
 			defer app.db.Unlock()
@@ -145,13 +145,13 @@ func (app *app) putUser(w http.ResponseWriter, r *http.Request) error {
 		}()
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return ErrNotFound
+				return errNotFound
 			} else {
 				return err
 			}
 		}
 
-		if err := app.RenderNotification(w, Notification{Ok: true, Message: "Updated"}); err != nil {
+		if err := app.renderNotification(w, notification{Ok: true, Message: "Updated"}); err != nil {
 			return err
 		}
 	}
@@ -159,19 +159,19 @@ func (app *app) putUser(w http.ResponseWriter, r *http.Request) error {
 	return app.tmpl.ExecuteTemplate(w, "users/view", userViewFromDB(&dbUser))
 }
 
-func (app *app) putUserPaidUntil(w http.ResponseWriter, r *http.Request) error {
+func (app *App) putUserPaidUntil(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
 		return err
 	}
 
 	if err := r.ParseForm(); err != nil {
-		return ErrParseForm
+		return errParseForm
 	}
 
 	paidUntilStr := web.FormScalar(r.Form, "paid-until")
 	paidUntil, err := time.ParseInLocation("2006-01-02 15:04:05", paidUntilStr+" 23:49:59", time.Local)
 	if err != nil {
-		return app.RenderNotification(w, Notification{
+		return app.renderNotification(w, notification{
 			Ok:      false,
 			Message: "Set a valid date",
 		})
@@ -189,26 +189,26 @@ func (app *app) putUserPaidUntil(w http.ResponseWriter, r *http.Request) error {
 	}()
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
+			return errNotFound
 		} else {
 			return err
 		}
 	}
 
-	if err := app.RenderNotification(w, Notification{Ok: true, Message: "Updated"}); err != nil {
+	if err := app.renderNotification(w, notification{Ok: true, Message: "Updated"}); err != nil {
 		return err
 	}
 
 	return app.tmpl.ExecuteTemplate(w, "users/view", userViewFromDB(&dbUser))
 }
 
-func (app *app) putUserBan(w http.ResponseWriter, r *http.Request) error {
+func (app *App) putUserBan(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
 		return err
 	}
 
 	if err := r.ParseForm(); err != nil {
-		return ErrParseForm
+		return errParseForm
 	}
 
 	ban := web.FormScalar(r.Form, "ban") == "true"
@@ -223,7 +223,7 @@ func (app *app) putUserBan(w http.ResponseWriter, r *http.Request) error {
 	}()
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
+			return errNotFound
 		} else {
 			return err
 		}
@@ -238,14 +238,14 @@ func (app *app) putUserBan(w http.ResponseWriter, r *http.Request) error {
 		msg = "Unbanned"
 	}
 
-	if err := app.RenderNotification(w, Notification{Ok: true, Message: msg}); err != nil {
+	if err := app.renderNotification(w, notification{Ok: true, Message: msg}); err != nil {
 		return err
 	}
 
 	return app.tmpl.ExecuteTemplate(w, "users/view", userViewFromDB(&dbUser))
 }
 
-func (app *app) userPage(w http.ResponseWriter, r *http.Request) error {
+func (app *App) userPage(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
 		return err
 	}
@@ -258,7 +258,7 @@ func (app *app) userPage(w http.ResponseWriter, r *http.Request) error {
 	}()
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
+			return errNotFound
 		} else {
 			return err
 		}
@@ -266,7 +266,7 @@ func (app *app) userPage(w http.ResponseWriter, r *http.Request) error {
 	return app.tmpl.ExecuteTemplate(w, "users/page", userViewFromDB(&dbUser))
 }
 
-func (app *app) usersList(w http.ResponseWriter, r *http.Request) error {
+func (app *App) usersList(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
 		return err
 	}

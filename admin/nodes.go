@@ -1,7 +1,7 @@
-package main
+package admin
 
 import (
-	"akhokhlow80/tanlweb/auth"
+	"akhokhlow80/tanlweb/admin/auth"
 	"akhokhlow80/tanlweb/db"
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
@@ -13,12 +13,12 @@ import (
 	"github.com/google/uuid"
 )
 
-func (app *app) registerNodeHandlers(m *http.ServeMux) {
-	m.HandleFunc("GET /nodes/new", web.FailableHandler(app.StandardErrorHandler, app.newNodePage))
-	m.HandleFunc("POST /nodes", web.FailableHandler(app.HTMXErrorHandler, app.putNode))
-	m.HandleFunc("PUT /nodes/{uuid}", web.FailableHandler(app.HTMXErrorHandler, app.putNode))
-	m.HandleFunc("GET /nodes/{uuid}", web.FailableHandler(app.StandardErrorHandler, app.nodePage))
-	m.HandleFunc("GET /nodes", web.FailableHandler(app.StandardErrorHandler, app.nodesList))
+func (app *App) registerNodeHandlers(m *http.ServeMux) {
+	m.HandleFunc("GET /nodes/new", web.FailableHandler(app.standardErrorHandler, app.newNodePage))
+	m.HandleFunc("POST /nodes", web.FailableHandler(app.htmxErrorHandler, app.putNode))
+	m.HandleFunc("PUT /nodes/{uuid}", web.FailableHandler(app.htmxErrorHandler, app.putNode))
+	m.HandleFunc("GET /nodes/{uuid}", web.FailableHandler(app.standardErrorHandler, app.nodePage))
+	m.HandleFunc("GET /nodes", web.FailableHandler(app.standardErrorHandler, app.nodesList))
 }
 
 type nodeErrors struct {
@@ -36,7 +36,7 @@ type nodeView struct {
 	Peers struct{}
 }
 
-func (app *app) newNodePage(w http.ResponseWriter, r *http.Request) error {
+func (app *App) newNodePage(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
 		return err
 	}
@@ -44,13 +44,13 @@ func (app *app) newNodePage(w http.ResponseWriter, r *http.Request) error {
 	return app.tmpl.ExecuteTemplate(w, "nodes/page", nil)
 }
 
-func (app *app) putNode(w http.ResponseWriter, r *http.Request) error {
+func (app *App) putNode(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
 		return err
 	}
 
 	if err := r.ParseForm(); err != nil {
-		return ErrParseForm
+		return errParseForm
 	}
 
 	addNew := r.Method == "POST"
@@ -97,11 +97,11 @@ func (app *app) putNode(w http.ResponseWriter, r *http.Request) error {
 			}
 		}
 
-		if err := app.RenderNotification(w, Notification{Ok: true, Message: "Created"}); err != nil {
+		if err := app.renderNotification(w, notification{Ok: true, Message: "Created"}); err != nil {
 			return err
 		}
 
-		w.Header().Add("HX-Replace-Url", app.EncryptURI("nodes/"+url.PathEscape(dbNode.Uuid)))
+		w.Header().Add("HX-Replace-Url", app.encryptURI("nodes/"+url.PathEscape(dbNode.Uuid)))
 	} else {
 		dbNode, err = func() (sqlgen.Node, error) {
 			defer app.db.Unlock()
@@ -118,13 +118,13 @@ func (app *app) putNode(w http.ResponseWriter, r *http.Request) error {
 					NameNotUnique: true,
 				})
 			} else if errors.Is(err, sql.ErrNoRows) {
-				return ErrNotFound
+				return errNotFound
 			} else {
 				return err
 			}
 		}
 
-		if err := app.RenderNotification(w, Notification{Ok: true, Message: "Updated"}); err != nil {
+		if err := app.renderNotification(w, notification{Ok: true, Message: "Updated"}); err != nil {
 			return err
 		}
 	}
@@ -136,7 +136,7 @@ func (app *app) putNode(w http.ResponseWriter, r *http.Request) error {
 	})
 }
 
-func (app *app) nodePage(w http.ResponseWriter, r *http.Request) error {
+func (app *App) nodePage(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func (app *app) nodePage(w http.ResponseWriter, r *http.Request) error {
 	}()
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
+			return errNotFound
 		} else {
 			return err
 		}
@@ -161,7 +161,7 @@ func (app *app) nodePage(w http.ResponseWriter, r *http.Request) error {
 	})
 }
 
-func (app *app) nodesList(w http.ResponseWriter, r *http.Request) error {
+func (app *App) nodesList(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
 		return err
 	}

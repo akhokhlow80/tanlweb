@@ -1,8 +1,8 @@
-package main
+package admin
 
 import (
 	"akhokhlow80/tanlweb/db"
-	"akhokhlow80/tanlweb/reqencrypt"
+	"akhokhlow80/tanlweb/admin/reqencrypt"
 	"akhokhlow80/tanlweb/sqlgen"
 	"context"
 	"encoding/base64"
@@ -10,14 +10,14 @@ import (
 	"fmt"
 )
 
-type RequestEncryptionKeyStore struct {
+type requestEncryptionKeyStore struct {
 	db *db.DB
 }
 
-var _ reqencrypt.KeyStore = (*RequestEncryptionKeyStore)(nil)
+var _ reqencrypt.KeyStore = (*requestEncryptionKeyStore)(nil)
 
 // GetKeys implements reqencrypt.KeyStore.
-func (r *RequestEncryptionKeyStore) GetKeys(ctx context.Context) (reqencrypt.Keys, error) {
+func (r *requestEncryptionKeyStore) GetKeys(ctx context.Context) (reqencrypt.Keys, error) {
 	defer r.db.RUnlock()
 	r.db.RLock()
 
@@ -47,7 +47,7 @@ func (r *RequestEncryptionKeyStore) GetKeys(ctx context.Context) (reqencrypt.Key
 }
 
 // PutKeys implements reqencrypt.KeyStore.
-func (r *RequestEncryptionKeyStore) PutKeys(ctx context.Context, keys *reqencrypt.Keys) error {
+func (r *requestEncryptionKeyStore) PutKeys(ctx context.Context, keys *reqencrypt.Keys) error {
 	defer r.db.Unlock()
 	r.db.Lock()
 
@@ -68,6 +68,6 @@ func (r *RequestEncryptionKeyStore) PutKeys(ctx context.Context, keys *reqencryp
 	return nil
 }
 
-func (app *app) EncryptURI(path string) string {
+func (app *App) encryptURI(path string) string {
 	return fmt.Sprintf("%s/%s", app.cfg.BaseURI, app.reqCipher.Encrypt(9 /* 512 */, path))
 }

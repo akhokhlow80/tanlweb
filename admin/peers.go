@@ -1,7 +1,7 @@
-package main
+package admin
 
 import (
-	"akhokhlow80/tanlweb/auth"
+	"akhokhlow80/tanlweb/admin/auth"
 	"akhokhlow80/tanlweb/peers"
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
@@ -19,12 +19,12 @@ import (
 
 // TODO: handle config request
 
-func (app *app) registerPeerHandlers(m *http.ServeMux) {
-	m.HandleFunc("GET /users/{user_uuid}/peers/new", web.FailableHandler(app.StandardErrorHandler, app.newPeerPage))
-	m.HandleFunc("GET /peers", web.FailableHandler(app.StandardErrorHandler, app.peersList))
-	m.HandleFunc("POST /peers", web.FailableHandler(app.HTMXErrorHandler, app.addPeer))
-	m.HandleFunc("GET /peers/requests/{uuid}", web.FailableHandler(app.StandardErrorHandler, app.newPeerRequest))
-	m.HandleFunc("POST /peers/requests/{uuid}/cancel", web.FailableHandler(app.StandardErrorHandler, app.cancelNewPeerRequest))
+func (app *App) registerPeerHandlers(m *http.ServeMux) {
+	m.HandleFunc("GET /users/{user_uuid}/peers/new", web.FailableHandler(app.standardErrorHandler, app.newPeerPage))
+	m.HandleFunc("GET /peers", web.FailableHandler(app.standardErrorHandler, app.peersList))
+	m.HandleFunc("POST /peers", web.FailableHandler(app.htmxErrorHandler, app.addPeer))
+	m.HandleFunc("GET /peers/requests/{uuid}", web.FailableHandler(app.standardErrorHandler, app.newPeerRequest))
+	m.HandleFunc("POST /peers/requests/{uuid}/cancel", web.FailableHandler(app.standardErrorHandler, app.cancelNewPeerRequest))
 }
 
 type newPeerNodeSelectOption struct {
@@ -37,7 +37,7 @@ type newPeerPageView struct {
 	Nodes    []newPeerNodeSelectOption
 }
 
-func (app *app) newPeerPage(w http.ResponseWriter, r *http.Request) error {
+func (app *App) newPeerPage(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
 		return err
 	}
@@ -73,12 +73,12 @@ type peerErrors struct {
 
 var wgInterfaceNameRegexp = regexp.MustCompile(`[a-zA-Z0-9_=+.-]{1,15}`)
 
-func (app *app) addPeer(w http.ResponseWriter, r *http.Request) error {
+func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
 		return err
 	}
 	if err := r.ParseForm(); err != nil {
-		return ErrParseForm
+		return errParseForm
 	}
 
 	uuid := uuid.New()
@@ -103,7 +103,7 @@ func (app *app) addPeer(w http.ResponseWriter, r *http.Request) error {
 		user, err := app.db.GetUser(ctx, userUUID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return ErrNotFound
+				return errNotFound
 			} else {
 				return err
 			}
@@ -111,7 +111,7 @@ func (app *app) addPeer(w http.ResponseWriter, r *http.Request) error {
 		node, err := app.db.GetNodeByUUID(ctx, nodeUUID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return ErrNotFound
+				return errNotFound
 			} else {
 				return err
 			}
@@ -129,7 +129,7 @@ func (app *app) addPeer(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	w.Header().Set("HX-Redirect", app.EncryptURI("peers/requests/"+url.PathEscape(uuid.String())))
+	w.Header().Set("HX-Redirect", app.encryptURI("peers/requests/"+url.PathEscape(uuid.String())))
 
 	return nil
 }
@@ -196,7 +196,7 @@ func parsePeerRequestStatus(s string) (peers.PeerRequestStatus, error) {
 	return peers.Pending, fmt.Errorf("Peer request has invalid status %s", s)
 }
 
-func (app *app) newPeerRequest(w http.ResponseWriter, r *http.Request) error {
+func (app *App) newPeerRequest(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
 		return err
 	}
@@ -215,7 +215,7 @@ func (app *app) newPeerRequest(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if len(dbResult) == 0 {
-		return ErrNotFound
+		return errNotFound
 	}
 	req, err := newPeerRequestViewFromDB(&dbResult[0])
 	if err != nil {
@@ -228,7 +228,7 @@ type peersListView struct {
 	NewRequests []newPeerRequestView
 }
 
-func (app *app) peersList(w http.ResponseWriter, r *http.Request) error {
+func (app *App) peersList(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
 		return err
 	}
@@ -258,7 +258,11 @@ func (app *app) peersList(w http.ResponseWriter, r *http.Request) error {
 	})
 }
 
-func (app *app) cancelNewPeerRequest(w http.ResponseWriter, r *http.Request) error {
+func (app *App) cancelNewPeerRequest(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
+		return err
+	}
+
 	uuid := r.PathValue("uuid")
 	dbRows, err := func() ([]sqlgen.GetNewPeerRequestsRow, error) {
 		app.db.Lock()
@@ -274,13 +278,13 @@ func (app *app) cancelNewPeerRequest(w http.ResponseWriter, r *http.Request) err
 	}()
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
+			return errNotFound
 		} else {
 			return err
 		}
 	}
 	if len(dbRows) == 0 {
-		return ErrNotFound
+		return errNotFound
 	}
 	req, err := newPeerRequestViewFromDB(&dbRows[0])
 	if err != nil {
@@ -289,5 +293,5 @@ func (app *app) cancelNewPeerRequest(w http.ResponseWriter, r *http.Request) err
 	if err := app.tmpl.ExecuteTemplate(w, "peers/request-view", req); err != nil {
 		return err
 	}
-	return app.RenderNotification(w, Notification{Ok: true, Message: "Cancelled"})
+	return app.renderNotification(w, notification{Ok: true, Message: "Cancelled"})
 }
