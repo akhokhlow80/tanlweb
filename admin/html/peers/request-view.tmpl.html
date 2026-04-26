@@ -7,7 +7,7 @@
     {{else if eq .Status .ConstStatus.Cancelled}}
       <span class="request-cancelled">&#10007;</span>
     {{end}}
-    Request {{slice .UUID 24}} to create a new peer
+    New peer request {{.ShortRandomID}}
   </h2>
 
   <div class="fields-container">
@@ -53,12 +53,12 @@
         id="config-url-container"
       >
         <p id="config-url-label">Link for user to get the config (click to copy):</p>
-        <pre id="config-url" class="inline">{{EncryptURI "configs/%s" .UUID}}</pre>
+        <pre id="config-url" class="inline">{{EncryptURI "configs/%s" .RandomID}}</pre>
       </div>
 
       <form
         hx-swap="none"
-        hx-post='{{EncryptURI "peers/requests/%s/cancel" .UUID}}'
+        hx-post='{{EncryptURI "peers/requests/%s/cancel" .RandomID}}'
         hx-disabled-elt="find input[type='submit']">
         <input type="submit" value="Cancel">
       </form>

@@ -98,14 +98,14 @@ RETURNING *;
 
 -- name: CreateNewPeerRequest :exec
 INSERT INTO new_peer_requests (
-    uuid,
+    random_id,
     interface_name,
     requested_at,
     requested_by_user_uuid,
     node_id,
     owned_by_user_id
 ) VALUES (
-    @uuid,
+    @random_id,
     @interface_name,
     @requested_at,
     @requested_by_user_uuid,
@@ -115,7 +115,7 @@ INSERT INTO new_peer_requests (
 
 -- name: GetNewPeerRequests :many
 SELECT
-    new_peer_requests.uuid,
+    new_peer_requests.random_id,
     new_peer_requests.requested_at,
     new_peer_requests.requested_by_user_uuid,
     new_peer_requests.interface_name,
@@ -127,7 +127,7 @@ FROM new_peer_requests
     JOIN nodes on nodes.id = new_peer_requests.node_id
     JOIN users AS owners on owners.id = new_peer_requests.owned_by_user_id
 WHERE
-    new_peer_requests.uuid = COALESCE(sqlc.narg(uuid), new_peer_requests.uuid) AND
+    new_peer_requests.random_id = COALESCE(sqlc.narg(random_id), new_peer_requests.random_id) AND
     (@include_completed OR new_peer_requests.status NOT IN ('created', 'cancelled'))
 ORDER BY requested_at DESC;
 
@@ -138,13 +138,13 @@ UPDATE new_peer_requests SET
     requested_by_user_uuid = @requested_by_user_uuid,
     status = @status
 WHERE
-    uuid = @uuid;
+    random_id = @random_id;
 
 -- name: CancelNewPeerRequest :one
 UPDATE new_peer_requests SET
     status = 'cancelled'
 WHERE
-    uuid = @uuid
+    random_id = @random_id
 RETURNING *;
 
 --- ======= Request encryption keys ======= 

@@ -6,15 +6,14 @@ import (
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"regexp"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // TODO: handle config request
@@ -23,8 +22,8 @@ func (app *App) registerPeerHandlers(m *http.ServeMux) {
 	m.HandleFunc("GET /users/{user_uuid}/peers/new", web.FailableHandler(app.standardErrorHandler, app.newPeerPage))
 	m.HandleFunc("GET /peers", web.FailableHandler(app.standardErrorHandler, app.peersList))
 	m.HandleFunc("POST /peers", web.FailableHandler(app.htmxErrorHandler, app.addPeer))
-	m.HandleFunc("GET /peers/requests/{uuid}", web.FailableHandler(app.standardErrorHandler, app.newPeerRequest))
-	m.HandleFunc("POST /peers/requests/{uuid}/cancel", web.FailableHandler(app.standardErrorHandler, app.cancelNewPeerRequest))
+	m.HandleFunc("GET /peers/requests/{random_id}", web.FailableHandler(app.standardErrorHandler, app.newPeerRequest))
+	m.HandleFunc("POST /peers/requests/{random_id}/cancel", web.FailableHandler(app.standardErrorHandler, app.cancelNewPeerRequest))
 }
 
 type newPeerNodeSelectOption struct {
@@ -81,7 +80,12 @@ func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
 		return errParseForm
 	}
 
-	uuid := uuid.New()
+	var randomIDBytes [32]byte
+	if _, err := rand.Read(randomIDBytes[:]); err != nil {
+		panic(err)
+	}
+	randomID := base64.RawURLEncoding.EncodeToString(randomIDBytes[:])
+
 	userUUID := web.FormScalar(r.Form, "user-uuid")
 	nodeUUID := web.FormScalar(r.Form, "node-uuid")
 	interfaceName := web.FormScalar(r.Form, "interface-name")
@@ -117,7 +121,7 @@ func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
 			}
 		}
 		return app.db.CreateNewPeerRequest(r.Context(), sqlgen.CreateNewPeerRequestParams{
-			Uuid:                uuid.String(),
+			RandomID:            randomID,
 			InterfaceName:       interfaceName,
 			RequestedAt:         time.Now(),
 			RequestedByUserUuid: &getAuthenticateUser(ctx).ID,
@@ -129,13 +133,14 @@ func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	w.Header().Set("HX-Redirect", app.encryptURI("peers/requests/"+url.PathEscape(uuid.String())))
+	w.Header().Set("HX-Redirect", app.encryptURI("peers/requests/"+randomID))
 
 	return nil
 }
 
 type newPeerRequestView struct {
-	UUID                string
+	RandomID            string
+	ShortRandomID       string
 	Status              peers.PeerRequestStatus
 	InterfaceName       string // zero if completed
 	RequestedAtUnix     int64  // zero if completed
@@ -163,7 +168,8 @@ func newPeerRequestViewFromDB(dbReq *sqlgen.GetNewPeerRequestsRow) (newPeerReque
 		return newPeerRequestView{}, err
 	}
 	return newPeerRequestView{
-		UUID:                dbReq.Uuid,
+		RandomID:            dbReq.RandomID,
+		ShortRandomID:       dbReq.RandomID[31:],
 		Status:              status,
 		InterfaceName:       dbReq.InterfaceName,
 		RequestedAtUnix:     dbReq.RequestedAt.Unix(),
@@ -201,13 +207,13 @@ func (app *App) newPeerRequest(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	uuid := r.PathValue("uuid")
+	randomID := r.PathValue("random_id")
 
 	dbResult, err := func() ([]sqlgen.GetNewPeerRequestsRow, error) {
 		defer app.db.RUnlock()
 		app.db.RLock()
 		return app.db.GetNewPeerRequests(r.Context(), sqlgen.GetNewPeerRequestsParams{
-			Uuid:             &uuid,
+			RandomID:         &randomID,
 			IncludeCompleted: true,
 		})
 	}()
@@ -237,7 +243,7 @@ func (app *App) peersList(w http.ResponseWriter, r *http.Request) error {
 		app.db.Lock()
 		defer app.db.Unlock()
 		return app.db.GetNewPeerRequests(r.Context(), sqlgen.GetNewPeerRequestsParams{
-			Uuid:             nil,
+			RandomID:         nil,
 			IncludeCompleted: false,
 		})
 	}()
@@ -263,16 +269,17 @@ func (app *App) cancelNewPeerRequest(w http.ResponseWriter, r *http.Request) err
 		return err
 	}
 
-	uuid := r.PathValue("uuid")
+	randomID := r.PathValue("random_id")
+
 	dbRows, err := func() ([]sqlgen.GetNewPeerRequestsRow, error) {
 		app.db.Lock()
 		defer app.db.Unlock()
-		_, err := app.db.CancelNewPeerRequest(r.Context(), uuid)
+		_, err := app.db.CancelNewPeerRequest(r.Context(), randomID)
 		if err != nil {
 			return nil, err
 		}
 		return app.db.GetNewPeerRequests(r.Context(), sqlgen.GetNewPeerRequestsParams{
-			Uuid:             &uuid,
+			RandomID:         &randomID,
 			IncludeCompleted: true,
 		})
 	}()

@@ -20,8 +20,8 @@ func (status PeerRequestStatus) Completed() bool {
 }
 
 type PeerRequest struct {
-	UUID   string
-	Status PeerRequestStatus
+	RandomID string
+	Status   PeerRequestStatus
 	// Cleared after the peer was created.
 	Sensitive struct {
 		InterfaceName       string
@@ -38,7 +38,7 @@ type RequestUpdater interface {
 	// Errors: ErrCreatePeerRequestNotFound
 	Do(
 		ctx context.Context,
-		reqUUID string,
+		randID string,
 		updateFn func(ctx context.Context, req *PeerRequest) error,
 	) error
 }
@@ -55,7 +55,7 @@ func (req *PeerRequest) Complete(
 	updateRequest RequestUpdater,
 	createPeer CreatePeerNodeClient,
 ) (WGQuickConf, Peer, error) {
-	err := updateRequest.Do(ctx, req.UUID, func(ctx context.Context, updReq *PeerRequest) error {
+	err := updateRequest.Do(ctx, req.RandomID, func(ctx context.Context, updReq *PeerRequest) error {
 		if updReq.Status != Pending {
 			return ErrRequestCompleted
 		}
@@ -74,7 +74,7 @@ func (req *PeerRequest) Complete(
 		return WGQuickConf{}, Peer{}, err
 	}
 
-	err = updateRequest.Do(ctx, req.UUID, func(ctx context.Context, updReq *PeerRequest) error {
+	err = updateRequest.Do(ctx, req.RandomID, func(ctx context.Context, updReq *PeerRequest) error {
 		updReq.Status = Created
 		*req = *updReq
 		return nil

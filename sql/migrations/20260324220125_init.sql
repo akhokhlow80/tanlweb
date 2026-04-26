@@ -22,7 +22,7 @@ CREATE TABLE users (
 );
 CREATE TABLE new_peer_requests (
     id                     INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid                   TEXT NOT NULL,
+    random_id              TEXT NOT NULL,      -- base64 raw url encoded (no padding)
     interface_name         TEXT NOT NULL,      -- zeroed after the peer was created
     requested_at           TIMESTAMP NOT NULL, -- zeroed after the peer was created
     requested_by_user_uuid TEXT,               -- zeroed after the peer was created

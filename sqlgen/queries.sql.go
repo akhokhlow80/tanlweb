@@ -122,16 +122,16 @@ const cancelNewPeerRequest = `-- name: CancelNewPeerRequest :one
 UPDATE new_peer_requests SET
     status = 'cancelled'
 WHERE
-    uuid = ?1
-RETURNING id, uuid, interface_name, requested_at, requested_by_user_uuid, node_id, owned_by_user_id, status
+    random_id = ?1
+RETURNING id, random_id, interface_name, requested_at, requested_by_user_uuid, node_id, owned_by_user_id, status
 `
 
-func (q *Queries) CancelNewPeerRequest(ctx context.Context, uuid string) (NewPeerRequest, error) {
-	row := q.db.QueryRowContext(ctx, cancelNewPeerRequest, uuid)
+func (q *Queries) CancelNewPeerRequest(ctx context.Context, randomID string) (NewPeerRequest, error) {
+	row := q.db.QueryRowContext(ctx, cancelNewPeerRequest, randomID)
 	var i NewPeerRequest
 	err := row.Scan(
 		&i.ID,
-		&i.Uuid,
+		&i.RandomID,
 		&i.InterfaceName,
 		&i.RequestedAt,
 		&i.RequestedByUserUuid,
@@ -145,7 +145,7 @@ func (q *Queries) CancelNewPeerRequest(ctx context.Context, uuid string) (NewPee
 const createNewPeerRequest = `-- name: CreateNewPeerRequest :exec
 
 INSERT INTO new_peer_requests (
-    uuid,
+    random_id,
     interface_name,
     requested_at,
     requested_by_user_uuid,
@@ -162,7 +162,7 @@ INSERT INTO new_peer_requests (
 `
 
 type CreateNewPeerRequestParams struct {
-	Uuid                string
+	RandomID            string
 	InterfaceName       string
 	RequestedAt         time.Time
 	RequestedByUserUuid *string
@@ -173,7 +173,7 @@ type CreateNewPeerRequestParams struct {
 // - ======= Peer requests =======
 func (q *Queries) CreateNewPeerRequest(ctx context.Context, arg CreateNewPeerRequestParams) error {
 	_, err := q.db.ExecContext(ctx, createNewPeerRequest,
-		arg.Uuid,
+		arg.RandomID,
 		arg.InterfaceName,
 		arg.RequestedAt,
 		arg.RequestedByUserUuid,
@@ -185,7 +185,7 @@ func (q *Queries) CreateNewPeerRequest(ctx context.Context, arg CreateNewPeerReq
 
 const getNewPeerRequests = `-- name: GetNewPeerRequests :many
 SELECT
-    new_peer_requests.uuid,
+    new_peer_requests.random_id,
     new_peer_requests.requested_at,
     new_peer_requests.requested_by_user_uuid,
     new_peer_requests.interface_name,
@@ -197,18 +197,18 @@ FROM new_peer_requests
     JOIN nodes on nodes.id = new_peer_requests.node_id
     JOIN users AS owners on owners.id = new_peer_requests.owned_by_user_id
 WHERE
-    new_peer_requests.uuid = COALESCE(?1, new_peer_requests.uuid) AND
+    new_peer_requests.random_id = COALESCE(?1, new_peer_requests.random_id) AND
     (?2 OR new_peer_requests.status NOT IN ('created', 'cancelled'))
 ORDER BY requested_at DESC
 `
 
 type GetNewPeerRequestsParams struct {
-	Uuid             *string
+	RandomID         *string
 	IncludeCompleted interface{}
 }
 
 type GetNewPeerRequestsRow struct {
-	Uuid                string
+	RandomID            string
 	RequestedAt         time.Time
 	RequestedByUserUuid *string
 	InterfaceName       string
@@ -219,7 +219,7 @@ type GetNewPeerRequestsRow struct {
 }
 
 func (q *Queries) GetNewPeerRequests(ctx context.Context, arg GetNewPeerRequestsParams) ([]GetNewPeerRequestsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getNewPeerRequests, arg.Uuid, arg.IncludeCompleted)
+	rows, err := q.db.QueryContext(ctx, getNewPeerRequests, arg.RandomID, arg.IncludeCompleted)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +228,7 @@ func (q *Queries) GetNewPeerRequests(ctx context.Context, arg GetNewPeerRequests
 	for rows.Next() {
 		var i GetNewPeerRequestsRow
 		if err := rows.Scan(
-			&i.Uuid,
+			&i.RandomID,
 			&i.RequestedAt,
 			&i.RequestedByUserUuid,
 			&i.InterfaceName,
@@ -471,7 +471,7 @@ UPDATE new_peer_requests SET
     requested_by_user_uuid = ?3,
     status = ?4
 WHERE
-    uuid = ?5
+    random_id = ?5
 `
 
 type UpdateNewPeerRequestParams struct {
@@ -479,7 +479,7 @@ type UpdateNewPeerRequestParams struct {
 	RequestedAt         time.Time
 	RequestedByUserUuid *string
 	Status              string
-	Uuid                string
+	RandomID            string
 }
 
 func (q *Queries) UpdateNewPeerRequest(ctx context.Context, arg UpdateNewPeerRequestParams) (int64, error) {
@@ -488,7 +488,7 @@ func (q *Queries) UpdateNewPeerRequest(ctx context.Context, arg UpdateNewPeerReq
 		arg.RequestedAt,
 		arg.RequestedByUserUuid,
 		arg.Status,
-		arg.Uuid,
+		arg.RandomID,
 	)
 	if err != nil {
 		return 0, err

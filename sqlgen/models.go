@@ -10,7 +10,7 @@ import (
 
 type NewPeerRequest struct {
 	ID                  int64
-	Uuid                string
+	RandomID            string
 	InterfaceName       string
 	RequestedAt         time.Time
 	RequestedByUserUuid *string

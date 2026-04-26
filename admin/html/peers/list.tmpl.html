@@ -13,7 +13,7 @@
         <table>
           <thead>
             <tr>
-              <td>Peer</td>
+              <td>ID</td>
               <td>For user</td>
               <td>Requested by</td>
               <td>Node</td>
@@ -24,7 +24,7 @@
             {{range .NewRequests}}
               <tr>
                 <td>
-                  <a href='{{EncryptURI "peers/requests/%s" .UUID}}'>{{ShortenUUID .UUID}}</a>
+                  <a href='{{EncryptURI "peers/requests/%s" .RandomID}}'>{{.ShortRandomID}}</a>
                 </td>
                 <td>
                   <a href='{{EncryptURI "users/%s" .OwnedByUserUUID}}'>{{ShortenUUID .OwnedByUserUUID}}</a>
