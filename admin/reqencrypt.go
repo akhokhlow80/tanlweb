@@ -1,8 +1,8 @@
 package admin
 
 import (
-	"akhokhlow80/tanlweb/db"
 	"akhokhlow80/tanlweb/admin/reqencrypt"
+	"akhokhlow80/tanlweb/db"
 	"akhokhlow80/tanlweb/sqlgen"
 	"context"
 	"encoding/base64"
@@ -51,12 +51,15 @@ func (r *requestEncryptionKeyStore) PutKeys(ctx context.Context, keys *reqencryp
 	defer r.db.Unlock()
 	r.db.Lock()
 
-	key0Base64 := base64.StdEncoding.EncodeToString(keys.Keys[0][:])
-	key1Base64 := base64.StdEncoding.EncodeToString(keys.Keys[1][:])
+	var keysBase64 [2]*string
+	for i := range keys.Keys {
+		keysBase64[i] = new(string)
+		*keysBase64[i] = base64.StdEncoding.EncodeToString(keys.Keys[0][:])
+	}
 
 	rows, err := r.db.UpdateRequestEncryptionKeys(ctx, sqlgen.UpdateRequestEncryptionKeysParams{
-		Key0:        &key0Base64,
-		Key1:        &key1Base64,
+		Key0:        keysBase64[0],
+		Key1:        keysBase64[1],
 		RotateAfter: keys.RotateAfter,
 	})
 	if err != nil {
