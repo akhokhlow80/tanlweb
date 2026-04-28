@@ -26,7 +26,7 @@ type WGQuickConf struct {
 	} `json:"node_peer"`
 }
 
-func (conf *WGQuickConf) String() {
+func (conf *WGQuickConf) String() string {
 	var sb strings.Builder
 
 	sb.WriteString("[Interface]\n")
@@ -42,7 +42,7 @@ func (conf *WGQuickConf) String() {
 	}
 	sb.WriteRune('\n')
 
-	sb.WriteString("[Peer]")
+	sb.WriteString("[Peer]\n")
 	fmt.Fprintf(&sb, "PublicKey = %s\n", conf.NodePeer.PublicKey)
 	if len(conf.NodePeer.PresharedKey) != 0 {
 		fmt.Fprintf(&sb, "PresharedKey = %s\n", conf.NodePeer.PresharedKey)
@@ -51,4 +51,6 @@ func (conf *WGQuickConf) String() {
 	if conf.NodePeer.PersistentKeepalive != 0 {
 		fmt.Fprintf(&sb, "PersistentKeepalive = %d\n", conf.NodePeer.PersistentKeepalive)
 	}
+
+	return sb.String()
 }
