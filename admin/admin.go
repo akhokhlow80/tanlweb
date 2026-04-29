@@ -210,7 +210,13 @@ func (app *App) Serve() error {
 	app.registerAuthHandlers(mux)
 	mux.Handle("/", app.authenticationMiddleware(securedMux))
 
-	handler := reqencrypt.DecryptPathMiddleware(app.reqCipher, web.LogMiddleware(mux))
+	loggedMux := web.LogMiddleware(mux)
+	noCacheMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Cache-Control", "no-store")
+		loggedMux.ServeHTTP(w, r)
+	})
+
+	handler := reqencrypt.DecryptPathMiddleware(app.reqCipher, noCacheMux)
 
 	log.Printf("Admin service is binding to %s", app.cfg.HTTPBind)
 	return http.ListenAndServe(app.cfg.HTTPBind, handler)
