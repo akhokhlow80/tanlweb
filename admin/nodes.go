@@ -85,7 +85,7 @@ func (app *App) addNodeHandler(w http.ResponseWriter, r *http.Request) error {
 		defer app.db.Unlock()
 		app.db.Lock()
 		return app.db.AddNode(r.Context(), sqlgen.AddNodeParams{
-			Uuid:    uuid.NewString(),
+			Uuid:    node.UUID,
 			Name:    node.Name,
 			BaseUri: node.BaseURI,
 		})
