@@ -43,7 +43,7 @@ func (app *App) Serve() error {
 
 		w.Header().Add(
 			"Content-Disposition",
-			fmt.Sprintf("inline; filename=\"%s.conf\"", interfaceName),
+			fmt.Sprintf("attachment; filename=\"%s.conf\"", interfaceName),
 		)
 
 		w.Header().Add("Content-Type", "text/plain")
