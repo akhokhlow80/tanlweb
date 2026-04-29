@@ -96,10 +96,11 @@ func (client *Client) CreatePeer(ctx context.Context, Owner string) (peers.WGQui
 	client.RLock()
 
 	type apiCreatePeerReq struct {
-		Owner string `json:"owner"`
+		Owner              string `json:"owner"`
+		RandomPresharedKey bool   `json:"random_preshared_key"`
 	}
 
-	reqBytes, err := json.Marshal(apiCreatePeerReq{Owner})
+	reqBytes, err := json.Marshal(apiCreatePeerReq{Owner: Owner, RandomPresharedKey: true})
 	if err != nil {
 		return peers.WGQuickConf{}, peers.Peer{}, err
 	}

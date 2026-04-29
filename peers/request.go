@@ -161,6 +161,8 @@ func (req *PeerRequest) Complete(
 	// It is not a vulnerability, but a very rare bug.
 	// I am not planning to fix it.
 
+	config.NodePeer.AllowedIPs = []string{"0.0.0.0/0", "::/0"}
+
 	return config, peer, interfaceName, nil
 }
 

@@ -23,6 +23,8 @@ type WGQuickConf struct {
 		Endpoint     string `json:"endpoint"`
 		// based on configuration (optional)
 		PersistentKeepalive int `json:"persistent_keepalive"`
+
+		AllowedIPs []string
 	} `json:"node_peer"`
 }
 
@@ -51,6 +53,7 @@ func (conf *WGQuickConf) String() string {
 	if conf.NodePeer.PersistentKeepalive != 0 {
 		fmt.Fprintf(&sb, "PersistentKeepalive = %d\n", conf.NodePeer.PersistentKeepalive)
 	}
+	fmt.Fprintf(&sb, "AllowedIPs = %s\n", strings.Join(conf.NodePeer.AllowedIPs, ","))
 
 	return sb.String()
 }
