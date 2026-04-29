@@ -4,6 +4,10 @@
     {{template "head"}}
   </head>
   <body>
+    <div id="notifications-container"></div>
     {{template "navigation" "peers"}}
+    <main>
+      {{template "peers/view" .}}
+    </main>
   </body>
-</html
+</html>

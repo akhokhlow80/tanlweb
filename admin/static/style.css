@@ -262,5 +262,13 @@ input.add-new {
 
 .load-peers-error {
   color: rgb(230, 30, 30);
-  /* color: rgb */
 }
+
+.peer-status-enabled {
+  color: #238c3f;
+}
+
+.peer-status-disabled {
+  color: #b02121;
+}
+

@@ -14,6 +14,8 @@ import (
 )
 
 func (app *App) registerPeerHandlers(m *http.ServeMux) {
+	m.HandleFunc("GET /peers/{public_key}",
+		web.FailableHandler(app.standardErrorHandler, app.peerPageHandler))
 	m.HandleFunc("GET /users/{user_uuid}/peers/new",
 		web.FailableHandler(app.standardErrorHandler, app.newPeerPageHandler))
 	m.HandleFunc("GET /peers",
@@ -24,6 +26,25 @@ func (app *App) registerPeerHandlers(m *http.ServeMux) {
 		web.FailableHandler(app.standardErrorHandler, app.peerRequestHandler))
 	m.HandleFunc("POST /peers/requests/{random_id}/cancel",
 		web.FailableHandler(app.standardErrorHandler, app.cancelPeerRequestHandler))
+}
+
+type peerView struct {
+	Peer  *nodes.PeerFromNode
+	Error error
+}
+
+func (app *App) peerPageHandler(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
+		return err
+	}
+
+	pubkey := r.PathValue("public_key")
+
+	peer, errors := app.nodeClients.GetPeer(r.Context(), pubkey)
+	return app.tmpl.ExecuteTemplate(w, "peers/page", peerView{
+		Peer:  peer,
+		Error: errors.Error(),
+	})
 }
 
 type newPeerNodeSelectOption struct {

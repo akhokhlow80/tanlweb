@@ -1,0 +1,47 @@
+<div id="peer-view">
+  {{if .Peer}}
+    <h2>View Peer</h2>
+    <div class="fields-container">
+      <div class="field">
+        <p class="name">Public key:</p>
+        <p class="value">{{.Peer.PublicKey}}</p>
+      </div>
+      <div class="field">
+        <p class="name">Preshared key:</p>
+        <p class="value">{{.Peer.PresharedKey}}</p>
+      </div>
+      <div class="field">
+        <p class="name">Node:</p>
+        <a href='{{EncryptURI "nodes/%s" .Peer.Node.UUID}}'>{{.Peer.Node.Name}}</a>
+      </div>
+      <div class="field">
+        <p class="name">Owner:</p>
+        <a href='{{EncryptURI "users/%s" .Peer.UserUUID}}'>{{ShortenUUID .Peer.UserUUID}}</a>
+      </div>
+      <div class="field">
+        <p class="name">Status:</p>
+        {{if .Peer.IsEnabled}}
+          <p class="value peer-status-enabled">Enabled</p>
+        {{else}}
+          <p class="value peer-status-disabled">Disabled</p>
+        {{end}}
+      </div>
+      <!--<form
+        id="user-status-form"
+        hx-swap="none"
+        hx-put='{{EncryptURI "peers/%s/enable" .Peer.PublicKey}}'
+        hx-disabled-elt="find input[type='submit']"
+      >
+        <input class="submit" type="submit" value="{{if .Peer.IsEnabled}}Disable{{else}}Enable{{end}}"/>
+      </form>-->
+    </div>
+  {{else}}
+    <h2>Peer not found</h2>
+  {{end}}
+
+  {{if .Error}}
+    <p class="load-peers-error">
+      Failed to load peers from some nodes: {{.Error.Error}}
+    </p>
+  {{end}}
+</div>

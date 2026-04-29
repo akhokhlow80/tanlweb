@@ -1,7 +1,6 @@
 package nodes
 
 import (
-	"akhokhlow80/tanlweb/peers"
 	"context"
 	"fmt"
 	"strings"
@@ -158,8 +157,8 @@ func (mc *MultiClient) GetPeers(ctx context.Context) ([]PeerFromNode, ErrorsByNo
 
 // Returns nil peer if not found
 // Result may be partially succesful.
-func (mc *MultiClient) GetPeer(ctx context.Context, pubkey string) (*peers.Peer, ErrorsByNode) {
-	results, err := runParallelRequests(ctx, mc, func(ctx context.Context, client *Client) (*peers.Peer, error) {
+func (mc *MultiClient) GetPeer(ctx context.Context, pubkey string) (*PeerFromNode, ErrorsByNode) {
+	results, err := runParallelRequests(ctx, mc, func(ctx context.Context, client *Client) (*PeerFromNode, error) {
 		return client.GetPeer(ctx, pubkey)
 	})
 	for _, peer := range results {

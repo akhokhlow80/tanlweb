@@ -139,7 +139,7 @@ func (client *Client) CreatePeer(ctx context.Context, Owner string) (peers.WGQui
 }
 
 // Returns nil peer if not found
-func (client *Client) GetPeer(ctx context.Context, pubkey string) (*peers.Peer, error) {
+func (client *Client) GetPeer(ctx context.Context, pubkey string) (*PeerFromNode, error) {
 	defer client.RUnlock()
 	client.RLock()
 
@@ -163,7 +163,10 @@ func (client *Client) GetPeer(ctx context.Context, pubkey string) (*peers.Peer, 
 		return nil, fmt.Errorf("Peer has invalid owner UUID %s", peer.UserUUID)
 	}
 
-	return &peer, nil
+	return &PeerFromNode{
+		Peer: peer,
+		Node: client.Node,
+	}, nil
 }
 
 func (client *Client) GetUserPeers(ctx context.Context, userUUID string) ([]PeerFromNode, error) {
