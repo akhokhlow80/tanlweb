@@ -13,10 +13,16 @@ type MultiClient struct {
 	clients map[string]*Client
 }
 
-func (mc *MultiClient) AddNode(uuid string, client *Client) {
+func NewMultiClient() *MultiClient {
+	return &MultiClient{
+		clients: make(map[string]*Client),
+	}
+}
+
+func (mc *MultiClient) Put(client *Client) {
 	defer mc.Unlock()
 	mc.Lock()
-	mc.clients[uuid] = client
+	mc.clients[client.Node.UUID] = client
 }
 
 func (mc *MultiClient) GetClient(nodeUUID string) *Client {
@@ -38,37 +44,49 @@ func (err *MultiError) Unwrap() []error {
 	return err.wrapped
 }
 
-type ErrorsByNode map[string]error
-
-func (errs ErrorsByNode) Ok() bool {
-	return len(errs) == 0
+type ErrorsByNode struct {
+	errors map[string]error
+	error  error // the error that wraps all nodes' errors
 }
 
-func (errs ErrorsByNode) Error() error {
-	if errs.Ok() {
-		return nil
+func newErrorsByNode(errors map[string]error) ErrorsByNode {
+	if len(errors) == 0 {
+		return ErrorsByNode{
+			errors: nil,
+			error:  nil,
+		}
 	}
-
 	var (
-		wrapped = make([]error, 0, len(errs))
+		wrapped = make([]error, 0, len(errors))
 		sb      strings.Builder
 		i       int
 	)
 	sb.WriteString("Errors occurred while making requests to nodes: ")
-	for nodeUUID, err := range errs {
+	for nodeUUID, err := range errors {
 		wrapped = append(wrapped, err)
 
 		fmt.Fprintf(&sb, "node %s: %s", nodeUUID, err)
-		if i != len(errs)-1 {
+		if i != len(errors)-1 {
 			sb.WriteString(", ")
 		}
 
 		i++
 	}
-	return &MultiError{
-		msg:     sb.String(),
-		wrapped: wrapped,
+	return ErrorsByNode{
+		errors: errors,
+		error: &MultiError{
+			msg:     sb.String(),
+			wrapped: wrapped,
+		},
 	}
+}
+
+func (errs ErrorsByNode) Ok() bool {
+	return errs.error == nil
+}
+
+func (errs ErrorsByNode) Error() error {
+	return errs.error
 }
 
 func runParallelRequests[R any](
@@ -87,11 +105,19 @@ func runParallelRequests[R any](
 		mc.RLock()
 		for _, client := range mc.clients {
 			resultCh := make(chan R)
-			errCh := make(chan error)
+			errCh := make(chan struct {
+				nodeUUID string
+				err      error
+			})
+			resultChs = append(resultChs, resultCh)
+			errChs = append(errChs, errCh)
 			go func() {
 				r, err := req(ctx, client)
 				if err != nil {
-					errCh <- err
+					errCh <- struct {
+						nodeUUID string
+						err      error
+					}{client.Node.UUID, err}
 				} else {
 					resultCh <- r
 				}
@@ -100,32 +126,33 @@ func runParallelRequests[R any](
 	}()
 
 	rs := make([]R, 0, len(mc.clients))
-	errs := ErrorsByNode(make(map[string]error, 0))
+	errorsByNode := make(map[string]error, 0)
 	for i := range len(mc.clients) {
 		select {
 		case r := <-resultChs[i]:
 			rs = append(rs, r)
 		case err := <-errChs[i]:
-			errs[err.nodeUUID] = err.err
+			errorsByNode[err.nodeUUID] = err.err
 		}
 	}
-	return rs, errs
+	return rs, newErrorsByNode(errorsByNode)
 }
 
-func (mc *MultiClient) getPeersByOwner(ctx context.Context, owner string) ([]peers.Peer, ErrorsByNode) {
-	result, errs := runParallelRequests(ctx, mc, func(ctx context.Context, client *Client) ([]peers.Peer, error) {
+func (mc *MultiClient) getPeersByOwner(ctx context.Context, owner string) ([]PeerFromNode, ErrorsByNode) {
+	result, errs := runParallelRequests(ctx, mc, func(ctx context.Context, client *Client) ([]PeerFromNode, error) {
 		return client.getPeersByOwner(ctx, owner)
 	})
-	var merged []peers.Peer
+	var merged []PeerFromNode
 	for _, result := range result {
 		merged = append(merged, result...)
 	}
+	sortPeers(merged)
 	return merged, errs
 }
 
 // Owner is optional; calling with empty will result in return of all peers from the node.
 // Result may be partially succesful.
-func (mc *MultiClient) GetPeers(ctx context.Context) ([]peers.Peer, ErrorsByNode) {
+func (mc *MultiClient) GetPeers(ctx context.Context) ([]PeerFromNode, ErrorsByNode) {
 	return mc.getPeersByOwner(ctx, "")
 }
 
@@ -144,6 +171,6 @@ func (mc *MultiClient) GetPeer(ctx context.Context, pubkey string) (*peers.Peer,
 }
 
 // Result may be partially succesful.
-func (mc *MultiClient) GetUserPeers(ctx context.Context, userUUID string) ([]peers.Peer, ErrorsByNode) {
+func (mc *MultiClient) GetUserPeers(ctx context.Context, userUUID string) ([]PeerFromNode, ErrorsByNode) {
 	return mc.getPeersByOwner(ctx, userUUID)
 }

@@ -8,5 +8,6 @@ type Config struct {
 	RefreshTokenLifetime       int
 	AccessTokenLifetime        int
 	RequestKeyRotationInterval int
+	PeerConfigsBaseURI         string
 	DebugMode                  bool
 }

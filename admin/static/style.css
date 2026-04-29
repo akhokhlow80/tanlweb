@@ -234,12 +234,16 @@ input.add-new {
   font-size: 15pt;
 }
 
-.request-cancelled {
+.request-failed {
   color: #b02121;
 }
 
 .request-created {
   color: #238c3f;
+}
+
+.request-cancelled {
+  color: rgb(120, 120, 120);
 }
 
 #config-url-container {
@@ -254,4 +258,9 @@ input.add-new {
 
 #config-url {
   margin-top: 1.5pt;
+}
+
+.load-peers-error {
+  color: rgb(230, 30, 30);
+  /* color: rgb */
 }

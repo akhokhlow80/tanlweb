@@ -3,10 +3,12 @@ package admin
 import (
 	"akhokhlow80/tanlweb/admin/auth"
 	"akhokhlow80/tanlweb/db"
+	"akhokhlow80/tanlweb/nodes"
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -14,11 +16,16 @@ import (
 )
 
 func (app *App) registerNodeHandlers(m *http.ServeMux) {
-	m.HandleFunc("GET /nodes/new", web.FailableHandler(app.standardErrorHandler, app.newNodePage))
-	m.HandleFunc("POST /nodes", web.FailableHandler(app.htmxErrorHandler, app.putNode))
-	m.HandleFunc("PUT /nodes/{uuid}", web.FailableHandler(app.htmxErrorHandler, app.putNode))
-	m.HandleFunc("GET /nodes/{uuid}", web.FailableHandler(app.standardErrorHandler, app.nodePage))
-	m.HandleFunc("GET /nodes", web.FailableHandler(app.standardErrorHandler, app.nodesList))
+	m.HandleFunc("GET /nodes/new",
+		web.FailableHandler(app.standardErrorHandler, app.newNodePageHandler))
+	m.HandleFunc("POST /nodes",
+		web.FailableHandler(app.htmxErrorHandler, app.addNodeHandler))
+	m.HandleFunc("PUT /nodes/{uuid}",
+		web.FailableHandler(app.htmxErrorHandler, app.updateNodeHandler))
+	m.HandleFunc("GET /nodes/{uuid}",
+		web.FailableHandler(app.standardErrorHandler, app.nodePageHandler))
+	m.HandleFunc("GET /nodes",
+		web.FailableHandler(app.standardErrorHandler, app.nodesListHandler))
 }
 
 type nodeErrors struct {
@@ -28,15 +35,15 @@ type nodeErrors struct {
 	NameNotUnique bool
 }
 
-type nodeView struct {
-	UUID    string
-	Name    string
-	BaseURI string
-
-	Peers struct{}
+func (errs *nodeErrors) Ok() bool {
+	return !(errs.NameEmpty || errs.BaseURIEmpty || errs.NameNotUnique)
 }
 
-func (app *App) newNodePage(w http.ResponseWriter, r *http.Request) error {
+type nodeView struct {
+	Node nodes.Node
+}
+
+func (app *App) newNodePageHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
 		return err
 	}
@@ -44,7 +51,18 @@ func (app *App) newNodePage(w http.ResponseWriter, r *http.Request) error {
 	return app.tmpl.ExecuteTemplate(w, "nodes/page", nil)
 }
 
-func (app *App) putNode(w http.ResponseWriter, r *http.Request) error {
+func validateNodeForm(node *nodes.Node) nodeErrors {
+	var validationErrors nodeErrors
+	if len(node.Name) == 0 {
+		validationErrors.NameEmpty = true
+	}
+	if len(node.BaseURI) == 0 {
+		validationErrors.BaseURIEmpty = true
+	}
+	return validationErrors
+}
+
+func (app *App) addNodeHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
 		return err
 	}
@@ -53,90 +71,113 @@ func (app *App) putNode(w http.ResponseWriter, r *http.Request) error {
 		return errParseForm
 	}
 
-	addNew := r.Method == "POST"
-
-	var nodeUUID string
-	if !addNew {
-		nodeUUID = r.PathValue("uuid")
+	node := nodes.Node{
+		UUID:    uuid.NewString(),
+		BaseURI: web.FormTrimmedScalar(r.Form, "base-uri"),
+		Name:    web.FormTrimmedScalar(r.Form, "name"),
 	}
-	name := web.FormScalar(r.Form, "name")
-	baseUri := web.FormScalar(r.Form, "base-uri")
-
-	var validationErrors nodeErrors
-	if len(name) == 0 {
-		validationErrors.NameEmpty = true
-	}
-	if len(baseUri) == 0 {
-		validationErrors.BaseURIEmpty = true
-	}
-	if validationErrors.NameEmpty || validationErrors.BaseURIEmpty {
+	validationErrors := validateNodeForm(&node)
+	if !validationErrors.Ok() {
 		return app.tmpl.ExecuteTemplate(w, "nodes/invalid", validationErrors)
 	}
 
-	var (
-		dbNode sqlgen.Node
-		err    error
-	)
-	if addNew {
-		dbNode, err = func() (sqlgen.Node, error) {
-			defer app.db.Unlock()
-			app.db.Lock()
-			return app.db.AddNode(r.Context(), sqlgen.AddNodeParams{
-				Uuid:    uuid.NewString(),
-				Name:    name,
-				BaseUri: baseUri,
+	_, err := func() (sqlgen.Node, error) {
+		defer app.db.Unlock()
+		app.db.Lock()
+		return app.db.AddNode(r.Context(), sqlgen.AddNodeParams{
+			Uuid:    uuid.NewString(),
+			Name:    node.Name,
+			BaseUri: node.BaseURI,
+		})
+	}()
+	if err != nil {
+		if db.IsConstraintErr(err) {
+			return app.tmpl.ExecuteTemplate(w, "nodes/invalid", nodeErrors{
+				NameNotUnique: true,
 			})
-		}()
-		if err != nil {
-			if db.IsConstraintErr(err) {
-				return app.tmpl.ExecuteTemplate(w, "nodes/invalid", nodeErrors{
-					NameNotUnique: true,
-				})
-			} else {
-				return err
-			}
-		}
-
-		if err := app.renderNotification(w, notification{Ok: true, Message: "Created"}); err != nil {
-			return err
-		}
-
-		w.Header().Add("HX-Replace-Url", app.encryptURI("nodes/"+url.PathEscape(dbNode.Uuid)))
-	} else {
-		dbNode, err = func() (sqlgen.Node, error) {
-			defer app.db.Unlock()
-			app.db.Lock()
-			return app.db.UpdateNode(r.Context(), sqlgen.UpdateNodeParams{
-				Uuid:    nodeUUID,
-				Name:    name,
-				BaseUri: baseUri,
-			})
-		}()
-		if err != nil {
-			if db.IsConstraintErr(err) {
-				return app.tmpl.ExecuteTemplate(w, "nodes/invalid", nodeErrors{
-					NameNotUnique: true,
-				})
-			} else if errors.Is(err, sql.ErrNoRows) {
-				return errNotFound
-			} else {
-				return err
-			}
-		}
-
-		if err := app.renderNotification(w, notification{Ok: true, Message: "Updated"}); err != nil {
+		} else {
 			return err
 		}
 	}
 
-	return app.tmpl.ExecuteTemplate(w, "nodes/view", nodeView{
+	app.nodeClients.Put(nodes.NewClient(node))
+
+	w.Header().Add("HX-Replace-Url", app.encryptURI("nodes/"+url.PathEscape(node.UUID)))
+
+	err = app.tmpl.ExecuteTemplate(w, "nodes/view", nodeView{
+		Node: node,
+	})
+	if err != nil {
+		return err
+	}
+
+	return app.renderSuccess(w, "Created")
+}
+
+func (app *App) updateNodeHandler(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
+		return err
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return errParseForm
+	}
+
+	node := nodes.Node{
+		UUID:    r.PathValue("uuid"),
+		BaseURI: web.FormTrimmedScalar(r.Form, "base-uri"),
+		Name:    web.FormTrimmedScalar(r.Form, "name"),
+	}
+	validationErrors := validateNodeForm(&node)
+	if !validationErrors.Ok() {
+		return app.tmpl.ExecuteTemplate(w, "nodes/invalid", validationErrors)
+	}
+
+	dbNode, err := func() (sqlgen.Node, error) {
+		defer app.db.Unlock()
+		app.db.Lock()
+		return app.db.UpdateNode(r.Context(), sqlgen.UpdateNodeParams{
+			Uuid:    node.UUID,
+			Name:    node.Name,
+			BaseUri: node.BaseURI,
+		})
+	}()
+	if err != nil {
+		if db.IsConstraintErr(err) {
+			return app.tmpl.ExecuteTemplate(w, "nodes/invalid", nodeErrors{
+				NameNotUnique: true,
+			})
+		} else if errors.Is(err, sql.ErrNoRows) {
+			return errNotFound
+		} else {
+			return err
+		}
+	}
+
+	node = nodes.Node{
 		UUID:    dbNode.Uuid,
-		Name:    dbNode.Name,
 		BaseURI: dbNode.BaseUri,
+		Name:    dbNode.Name,
+	}
+
+	client := app.nodeClients.GetClient(node.UUID)
+	if client == nil {
+		// impossible
+		return fmt.Errorf("No client found for node %s", node.UUID)
+	} else {
+		client.Update(node)
+	}
+
+	if err := app.renderNotification(w, notification{Ok: true, Message: "Updated"}); err != nil {
+		return err
+	}
+
+	return app.tmpl.ExecuteTemplate(w, "nodes/view", nodeView{
+		Node: node,
 	})
 }
 
-func (app *App) nodePage(w http.ResponseWriter, r *http.Request) error {
+func (app *App) nodePageHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
 		return err
 	}
@@ -155,13 +196,15 @@ func (app *App) nodePage(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	return app.tmpl.ExecuteTemplate(w, "nodes/page", nodeView{
-		UUID:    dbNode.Uuid,
-		Name:    dbNode.Name,
-		BaseURI: dbNode.BaseUri,
+		Node: nodes.Node{
+			UUID:    dbNode.Uuid,
+			Name:    dbNode.Name,
+			BaseURI: dbNode.BaseUri,
+		},
 	})
 }
 
-func (app *App) nodesList(w http.ResponseWriter, r *http.Request) error {
+func (app *App) nodesListHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
 		return err
 	}
@@ -174,14 +217,16 @@ func (app *App) nodesList(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	nodes := make([]nodeView, 0, len(dbNodes))
+	nodeViews := make([]nodeView, 0, len(dbNodes))
 	for _, dbNode := range dbNodes {
 		node := nodeView{
-			UUID:    dbNode.Uuid,
-			Name:    dbNode.Name,
-			BaseURI: dbNode.BaseUri,
+			Node: nodes.Node{
+				UUID:    dbNode.Uuid,
+				Name:    dbNode.Name,
+				BaseURI: dbNode.BaseUri,
+			},
 		}
-		nodes = append(nodes, node)
+		nodeViews = append(nodeViews, node)
 	}
-	return app.tmpl.ExecuteTemplate(w, "nodes/list", nodes)
+	return app.tmpl.ExecuteTemplate(w, "nodes/list", nodeViews)
 }

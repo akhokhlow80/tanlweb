@@ -4,6 +4,8 @@
       <span>&#128337;</span>
     {{else if eq .Status .ConstStatus.Created}}
       <span class="request-created">&#10003;</span>
+    {{else if eq .Status .ConstStatus.Failed}}
+      <span class="request-failed">&#10007;</span>
     {{else if eq .Status .ConstStatus.Cancelled}}
       <span class="request-cancelled">&#10007;</span>
     {{end}}
@@ -44,6 +46,8 @@
         <span class="state-trans">&rarr;</span>
         <span {{if eq .Status .ConstStatus.Created}}class="current-state"{{end}}>Created</span>
         <span class="state-trans">|</span>
+        <span {{if eq .Status .ConstStatus.Failed}}class="current-state"{{end}}>Failed</span>
+        <span class="state-trans">|</span>
         <span {{if eq .Status .ConstStatus.Cancelled}}class="current-state"{{end}}>Cancelled</span>
       </p>
     </div>
@@ -53,7 +57,7 @@
         id="config-url-container"
       >
         <p id="config-url-label">Link for user to get the config (click to copy):</p>
-        <pre id="config-url" class="inline">{{EncryptURI "configs/%s" .RandomID}}</pre>
+        <pre id="config-url" class="inline">{{.ConfigURL}}</pre>
       </div>
 
       <form

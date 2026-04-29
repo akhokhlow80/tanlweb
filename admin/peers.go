@@ -2,28 +2,28 @@ package admin
 
 import (
 	"akhokhlow80/tanlweb/admin/auth"
+	"akhokhlow80/tanlweb/nodes"
 	"akhokhlow80/tanlweb/peers"
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"errors"
-	"fmt"
 	"net/http"
-	"regexp"
-	"time"
+	"net/url"
 )
 
-// TODO: handle config request
-
 func (app *App) registerPeerHandlers(m *http.ServeMux) {
-	m.HandleFunc("GET /users/{user_uuid}/peers/new", web.FailableHandler(app.standardErrorHandler, app.newPeerPage))
-	m.HandleFunc("GET /peers", web.FailableHandler(app.standardErrorHandler, app.peersList))
-	m.HandleFunc("POST /peers", web.FailableHandler(app.htmxErrorHandler, app.addPeer))
-	m.HandleFunc("GET /peers/requests/{random_id}", web.FailableHandler(app.standardErrorHandler, app.newPeerRequest))
-	m.HandleFunc("POST /peers/requests/{random_id}/cancel", web.FailableHandler(app.standardErrorHandler, app.cancelNewPeerRequest))
+	m.HandleFunc("GET /users/{user_uuid}/peers/new",
+		web.FailableHandler(app.standardErrorHandler, app.newPeerPageHandler))
+	m.HandleFunc("GET /peers",
+		web.FailableHandler(app.standardErrorHandler, app.peersListHandler))
+	m.HandleFunc("POST /peers",
+		web.FailableHandler(app.htmxErrorHandler, app.addPeer))
+	m.HandleFunc("GET /peers/requests/{random_id}",
+		web.FailableHandler(app.standardErrorHandler, app.peerRequestHandler))
+	m.HandleFunc("POST /peers/requests/{random_id}/cancel",
+		web.FailableHandler(app.standardErrorHandler, app.cancelPeerRequestHandler))
 }
 
 type newPeerNodeSelectOption struct {
@@ -36,7 +36,7 @@ type newPeerPageView struct {
 	Nodes    []newPeerNodeSelectOption
 }
 
-func (app *App) newPeerPage(w http.ResponseWriter, r *http.Request) error {
+func (app *App) newPeerPageHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
 		return err
 	}
@@ -70,21 +70,20 @@ type peerErrors struct {
 	InvalidInterfaceName bool
 }
 
-var wgInterfaceNameRegexp = regexp.MustCompile(`[a-zA-Z0-9_=+.-]{1,15}`)
+func (errs *peerErrors) Ok() bool {
+	return !(errs.NodeUUIDEmpty || errs.InvalidInterfaceName)
+}
 
 func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
 		return err
 	}
+
+	// Parse form
+
 	if err := r.ParseForm(); err != nil {
 		return errParseForm
 	}
-
-	var randomIDBytes [32]byte
-	if _, err := rand.Read(randomIDBytes[:]); err != nil {
-		panic(err)
-	}
-	randomID := base64.RawURLEncoding.EncodeToString(randomIDBytes[:])
 
 	userUUID := web.FormScalar(r.Form, "user-uuid")
 	nodeUUID := web.FormScalar(r.Form, "node-uuid")
@@ -94,17 +93,29 @@ func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
 	if len(nodeUUID) == 0 {
 		peerErrors.NodeUUIDEmpty = true
 	}
-	if !wgInterfaceNameRegexp.MatchString(interfaceName) {
-		peerErrors.InvalidInterfaceName = true
+	req, err := peers.NewPeerRequest(
+		interfaceName,
+		getAuthenticateUser(r.Context()).ID,
+		nodeUUID,
+		userUUID,
+	)
+	if err != nil {
+		if errors.Is(err, peers.ErrInvalidInterfaceName) {
+			peerErrors.InvalidInterfaceName = true
+		} else {
+			return err
+		}
 	}
-	if peerErrors.InvalidInterfaceName || peerErrors.NodeUUIDEmpty {
+	if !peerErrors.Ok() {
 		return app.tmpl.ExecuteTemplate(w, "peers/invalid", peerErrors)
 	}
 
-	err := func(ctx context.Context) error {
-		defer app.db.RUnlock()
-		app.db.RLock()
-		user, err := app.db.GetUser(ctx, userUUID)
+	// Put to the db
+
+	err = func(ctx context.Context) error {
+		defer app.db.Unlock()
+		app.db.Lock()
+		user, err := app.db.GetUser(ctx, req.OwnerUUID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return errNotFound
@@ -112,7 +123,7 @@ func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
 				return err
 			}
 		}
-		node, err := app.db.GetNodeByUUID(ctx, nodeUUID)
+		node, err := app.db.GetNodeByUUID(ctx, req.NodeUUID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return errNotFound
@@ -120,11 +131,11 @@ func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
 				return err
 			}
 		}
-		return app.db.CreateNewPeerRequest(r.Context(), sqlgen.CreateNewPeerRequestParams{
-			RandomID:            randomID,
-			InterfaceName:       interfaceName,
-			RequestedAt:         time.Now(),
-			RequestedByUserUuid: &getAuthenticateUser(ctx).ID,
+		return app.db.CreatePeerRequest(r.Context(), sqlgen.CreatePeerRequestParams{
+			RandomID:            req.RandomID,
+			InterfaceName:       req.Sensitive.InterfaceName,
+			RequestedAt:         req.Sensitive.RequestedAt,
+			RequestedByUserUuid: &req.Sensitive.RequestedByUserUUID,
 			OwnedByUserID:       user.ID,
 			NodeID:              node.ID,
 		})
@@ -133,7 +144,12 @@ func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	w.Header().Set("HX-Redirect", app.encryptURI("peers/requests/"+randomID))
+	// Put to the cache
+	if err := app.putPendingPeerRequestToCache(req); err != nil {
+		return err
+	}
+
+	w.Header().Set("HX-Redirect", app.encryptURI("peers/requests/"+url.PathEscape(req.RandomID)))
 
 	return nil
 }
@@ -148,24 +164,34 @@ type newPeerRequestView struct {
 	OwnedByUserUUID     string
 	NodeUUID            string
 	NodeName            string
+	ConfigURL           string // zero if status is not pending
 
 	// To compare with real status in templates
 	ConstStatus struct {
 		Pending,
 		ConfigRequested,
 		Created,
+		Failed,
 		Cancelled peers.PeerRequestStatus
 	}
 }
 
-func newPeerRequestViewFromDB(dbReq *sqlgen.GetNewPeerRequestsRow) (newPeerRequestView, error) {
+func (app *App) parsePeerRequestViewFromDB(
+	dbReq *sqlgen.PeerRequest,
+	dbOwner *sqlgen.User,
+	dbNode *sqlgen.Node,
+) (newPeerRequestView, error) {
 	var requestedBy string
 	if dbReq.RequestedByUserUuid != nil {
 		requestedBy = *dbReq.RequestedByUserUuid
 	}
-	status, err := parsePeerRequestStatus(dbReq.Status)
+	status, err := peers.ParsePeerRequestStatus(dbReq.Status)
 	if err != nil {
 		return newPeerRequestView{}, err
+	}
+	var configURL string
+	if status == peers.Pending {
+		configURL = app.cfg.PeerConfigsBaseURI + "/" + url.PathEscape(dbReq.RandomID)
 	}
 	return newPeerRequestView{
 		RandomID:            dbReq.RandomID,
@@ -174,131 +200,127 @@ func newPeerRequestViewFromDB(dbReq *sqlgen.GetNewPeerRequestsRow) (newPeerReque
 		InterfaceName:       dbReq.InterfaceName,
 		RequestedAtUnix:     dbReq.RequestedAt.Unix(),
 		RequestedByUserUUID: requestedBy,
-		OwnedByUserUUID:     dbReq.OwnedByUserUuid,
-		NodeUUID:            dbReq.NodeUuid,
-		NodeName:            dbReq.NodeName,
+		OwnedByUserUUID:     dbOwner.Uuid,
+		NodeUUID:            dbNode.Uuid,
+		NodeName:            dbNode.Name,
+		ConfigURL:           configURL,
 		ConstStatus: struct {
-			Pending, ConfigRequested, Created, Cancelled peers.PeerRequestStatus
+			Pending, ConfigRequested, Created, Failed, Cancelled peers.PeerRequestStatus
 		}{
 			Pending:         peers.Pending,
 			ConfigRequested: peers.ConfigRequested,
 			Created:         peers.Created,
+			Failed:          peers.Failed,
 			Cancelled:       peers.Cancelled,
 		},
 	}, nil
 }
 
-func parsePeerRequestStatus(s string) (peers.PeerRequestStatus, error) {
-	switch s {
-	case string(peers.Pending):
-		fallthrough
-	case string(peers.ConfigRequested):
-		fallthrough
-	case string(peers.Created):
-		fallthrough
-	case string(peers.Cancelled):
-		return peers.PeerRequestStatus(s), nil
-	}
-	return peers.Pending, fmt.Errorf("Peer request has invalid status %s", s)
-}
-
-func (app *App) newPeerRequest(w http.ResponseWriter, r *http.Request) error {
+func (app *App) peerRequestHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
 		return err
 	}
 
 	randomID := r.PathValue("random_id")
 
-	dbResult, err := func() ([]sqlgen.GetNewPeerRequestsRow, error) {
+	dbReq, err := func() (sqlgen.GetPeerRequestByRandomIDRow, error) {
 		defer app.db.RUnlock()
 		app.db.RLock()
-		return app.db.GetNewPeerRequests(r.Context(), sqlgen.GetNewPeerRequestsParams{
-			RandomID:         &randomID,
-			IncludeCompleted: true,
-		})
+		return app.db.GetPeerRequestByRandomID(r.Context(), randomID)
 	}()
 	if err != nil {
 		return err
 	}
-	if len(dbResult) == 0 {
-		return errNotFound
-	}
-	req, err := newPeerRequestViewFromDB(&dbResult[0])
+
+	view, err := app.parsePeerRequestViewFromDB(&dbReq.PeerRequest, &dbReq.User, &dbReq.Node)
 	if err != nil {
 		return err
 	}
-	return app.tmpl.ExecuteTemplate(w, "peers/request-page", req)
+	return app.tmpl.ExecuteTemplate(w, "peers/request-page", view)
 }
 
 type peersListView struct {
-	NewRequests []newPeerRequestView
+	Requests     []newPeerRequestView
+	Peers        []nodes.PeerFromNode
+	ErrorMessage string
 }
 
-func (app *App) peersList(w http.ResponseWriter, r *http.Request) error {
+func (app *App) peersListHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
 		return err
 	}
 
-	dbReqs, err := func() ([]sqlgen.GetNewPeerRequestsRow, error) {
-		app.db.Lock()
-		defer app.db.Unlock()
-		return app.db.GetNewPeerRequests(r.Context(), sqlgen.GetNewPeerRequestsParams{
-			RandomID:         nil,
-			IncludeCompleted: false,
-		})
+	dbReqs, err := func() ([]sqlgen.GetPeerRequestsRow, error) {
+		app.db.RLock()
+		defer app.db.RUnlock()
+		return app.db.GetPeerRequests(r.Context())
 	}()
 	if err != nil {
 		return err
 	}
 	reqs := make([]newPeerRequestView, 0, len(dbReqs))
 	for _, dbReq := range dbReqs {
-		req, err := newPeerRequestViewFromDB(&dbReq)
+		req, err := app.parsePeerRequestViewFromDB(&dbReq.PeerRequest, &dbReq.User, &dbReq.Node)
 		if err != nil {
 			return err
+		}
+		if req.Status != peers.Pending && req.Status != peers.ConfigRequested {
+			continue
 		}
 		reqs = append(reqs, req)
 	}
 
+	peers, errors := app.nodeClients.GetPeers(r.Context())
+	var errMsg string
+	if errors.Error() != nil {
+		errMsg = errors.Error().Error()
+	}
+
 	return app.tmpl.ExecuteTemplate(w, "peers/list", peersListView{
-		NewRequests: reqs,
+		Requests:     reqs,
+		Peers:        peers,
+		ErrorMessage: errMsg,
 	})
 }
 
-func (app *App) cancelNewPeerRequest(w http.ResponseWriter, r *http.Request) error {
+func (app *App) cancelPeerRequestHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
 		return err
 	}
 
 	randomID := r.PathValue("random_id")
 
-	dbRows, err := func() ([]sqlgen.GetNewPeerRequestsRow, error) {
-		app.db.Lock()
-		defer app.db.Unlock()
-		_, err := app.db.CancelNewPeerRequest(r.Context(), randomID)
-		if err != nil {
-			return nil, err
-		}
-		return app.db.GetNewPeerRequests(r.Context(), sqlgen.GetNewPeerRequestsParams{
-			RandomID:         &randomID,
-			IncludeCompleted: true,
-		})
-	}()
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	peerReq, ok := app.peerReqCache.Pop(randomID)
+	if !ok {
+		return errNotFound
+	}
+
+	if err := peerReq.Cancel(r.Context()); err != nil {
+		if errors.Is(err, peers.ErrRequestNotFound) {
 			return errNotFound
+		} else if errors.Is(err, peers.ErrRequestIsNotPending) {
+			return app.renderError(w, "Request is no longer pending")
 		} else {
 			return err
 		}
 	}
-	if len(dbRows) == 0 {
-		return errNotFound
-	}
-	req, err := newPeerRequestViewFromDB(&dbRows[0])
+
+	dbReq, err := func() (sqlgen.GetPeerRequestByRandomIDRow, error) {
+		defer app.db.RUnlock()
+		app.db.RLock()
+		return app.db.GetPeerRequestByRandomID(r.Context(), randomID)
+	}()
 	if err != nil {
 		return err
 	}
-	if err := app.tmpl.ExecuteTemplate(w, "peers/request-view", req); err != nil {
+
+	view, err := app.parsePeerRequestViewFromDB(&dbReq.PeerRequest, &dbReq.User, &dbReq.Node)
+	if err != nil {
 		return err
 	}
-	return app.renderNotification(w, notification{Ok: true, Message: "Cancelled"})
+	if err := app.tmpl.ExecuteTemplate(w, "peers/request-page", view); err != nil {
+		return err
+	}
+
+	return app.renderSuccess(w, "Cancelled")
 }

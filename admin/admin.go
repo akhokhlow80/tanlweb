@@ -4,6 +4,9 @@ import (
 	"akhokhlow80/tanlweb/admin/auth"
 	"akhokhlow80/tanlweb/admin/reqencrypt"
 	"akhokhlow80/tanlweb/db"
+	"akhokhlow80/tanlweb/nodes"
+	"akhokhlow80/tanlweb/peers"
+	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
 	"context"
 	"database/sql"
@@ -21,11 +24,13 @@ import (
 )
 
 type App struct {
-	cfg       Config
-	db        *db.DB
-	reqCipher *reqencrypt.Cipher
-	tmpl      *template.Template
-	auth      *auth.Service
+	cfg          Config
+	db           *db.DB
+	peerReqCache *peers.PendingRequestsCache
+	reqCipher    *reqencrypt.Cipher
+	tmpl         *template.Template
+	auth         *auth.Service
+	nodeClients  *nodes.MultiClient
 }
 
 var (
@@ -113,11 +118,61 @@ func (app *App) initAuth() error {
 	return nil
 }
 
-func NewApp(cfg Config, db *db.DB) (*App, error) {
+func (app *App) initNodesClient() error {
+	dbNodes, err := func() ([]sqlgen.Node, error) {
+		defer app.db.RUnlock()
+		app.db.RLock()
+		return app.db.GetNodes(context.Background())
+	}()
+	if err != nil {
+		return err
+	}
+
+	app.nodeClients = nodes.NewMultiClient()
+	for _, dbNode := range dbNodes {
+		app.nodeClients.Put(nodes.NewClient(
+			nodes.Node{
+				UUID:    dbNode.Uuid,
+				BaseURI: dbNode.BaseUri,
+				Name:    dbNode.Name,
+			},
+		))
+	}
+
+	return nil
+}
+
+func (app *App) populatePeerReqCache() error {
+	dbReqs, err := func() ([]sqlgen.GetPeerRequestsRow, error) {
+		defer app.db.RUnlock()
+		app.db.RLock()
+		return app.db.GetPeerRequests(context.Background())
+	}()
+	if err != nil {
+		return err
+	}
+	for _, dbRow := range dbReqs {
+		req, err := parsePeerRequestFromDB(&dbRow.PeerRequest, &dbRow.User, &dbRow.Node)
+		if err != nil {
+			return err
+		}
+		if req.Status != peers.Pending {
+			continue
+		}
+
+		if err := app.putPendingPeerRequestToCache(req); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func NewApp(cfg Config, db *db.DB, peerReqCache *peers.PendingRequestsCache) (*App, error) {
 	app := new(App)
 
 	app.cfg = cfg
 	app.db = db
+	app.peerReqCache = peerReqCache
 	if err := app.initReqCipher(); err != nil {
 		return nil, err
 	}
@@ -127,8 +182,14 @@ func NewApp(cfg Config, db *db.DB) (*App, error) {
 	if err := app.initAuth(); err != nil {
 		return nil, err
 	}
+	if err := app.initNodesClient(); err != nil {
+		return nil, err
+	}
 
 	if err := app.addRootUserIfNotExists(context.Background()); err != nil {
+		return nil, err
+	}
+	if err := app.populatePeerReqCache(); err != nil {
 		return nil, err
 	}
 
@@ -151,7 +212,7 @@ func (app *App) Serve() error {
 
 	handler := reqencrypt.DecryptPathMiddleware(app.reqCipher, web.LogMiddleware(mux))
 
-	log.Printf("Binding to %s", app.cfg.HTTPBind)
+	log.Printf("Admin service is binding to %s", app.cfg.HTTPBind)
 	return http.ListenAndServe(app.cfg.HTTPBind, handler)
 }
 

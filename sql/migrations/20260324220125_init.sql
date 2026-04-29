@@ -20,7 +20,7 @@ CREATE TABLE users (
     login_token_version   INTEGER NOT NULL DEFAULT 0,
     refresh_token_version INTEGER NOT NULL DEFAULT 0
 );
-CREATE TABLE new_peer_requests (
+CREATE TABLE peer_requests (
     id                     INTEGER PRIMARY KEY AUTOINCREMENT,
     random_id              TEXT NOT NULL,      -- base64 raw url encoded (no padding)
     interface_name         TEXT NOT NULL,      -- zeroed after the peer was created
@@ -28,7 +28,7 @@ CREATE TABLE new_peer_requests (
     requested_by_user_uuid TEXT,               -- zeroed after the peer was created
     node_id                INTEGER NOT NULL,
     owned_by_user_id       INTEGER NOT NULL,
-    status                 TEXT NOT NULL DEFAULT 'pending', -- one of: "pending", "config-requested", "created", "cancelled"
+    status                 TEXT NOT NULL DEFAULT 'pending', -- one of: "pending", "config-requested", "created", "cancelled", "failed"
 
     FOREIGN KEY(node_id) REFERENCES nodes(id)
         ON DELETE CASCADE
@@ -55,5 +55,5 @@ INSERT INTO request_encryption_keys (
 -- +goose Down
 DROP TABLE nodes;
 DROP TABLE users;
-DROP TABLE new_peer_requests;
+DROP TABLE peer_requests;
 DROP TABLE request_encryption_keys;

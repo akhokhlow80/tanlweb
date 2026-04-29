@@ -96,8 +96,8 @@ RETURNING *;
 
 --- ======= Peer requests ======= 
 
--- name: CreateNewPeerRequest :exec
-INSERT INTO new_peer_requests (
+-- name: CreatePeerRequest :exec
+INSERT INTO peer_requests (
     random_id,
     interface_name,
     requested_at,
@@ -113,26 +113,23 @@ INSERT INTO new_peer_requests (
     @owned_by_user_id
 );
 
--- name: GetNewPeerRequests :many
-SELECT
-    new_peer_requests.random_id,
-    new_peer_requests.requested_at,
-    new_peer_requests.requested_by_user_uuid,
-    new_peer_requests.interface_name,
-    new_peer_requests.status,
-    nodes.uuid as node_uuid,
-    nodes.name as node_name,
-    owners.uuid as owned_by_user_uuid
-FROM new_peer_requests
-    JOIN nodes on nodes.id = new_peer_requests.node_id
-    JOIN users AS owners on owners.id = new_peer_requests.owned_by_user_id
+-- name: GetPeerRequestByRandomID :one
+SELECT sqlc.embed(peer_requests), sqlc.embed(owners), sqlc.embed(nodes)
+FROM peer_requests
+    JOIN nodes on nodes.id = peer_requests.node_id
+    JOIN users AS owners on owners.id = peer_requests.owned_by_user_id
 WHERE
-    new_peer_requests.random_id = COALESCE(sqlc.narg(random_id), new_peer_requests.random_id) AND
-    (@include_completed OR new_peer_requests.status NOT IN ('created', 'cancelled'))
+    peer_requests.random_id = @random_id;
+
+-- name: GetPeerRequests :many
+SELECT sqlc.embed(peer_requests), sqlc.embed(owners), sqlc.embed(nodes)
+FROM peer_requests
+    JOIN nodes on nodes.id = peer_requests.node_id
+    JOIN users AS owners on owners.id = peer_requests.owned_by_user_id
 ORDER BY requested_at DESC;
 
--- name: UpdateNewPeerRequest :execrows
-UPDATE new_peer_requests SET
+-- name: UpdatePeerRequest :execrows
+UPDATE peer_requests SET
     interface_name = @interface_name,
     requested_at = @requested_at,
     requested_by_user_uuid = @requested_by_user_uuid,
@@ -140,8 +137,8 @@ UPDATE new_peer_requests SET
 WHERE
     random_id = @random_id;
 
--- name: CancelNewPeerRequest :one
-UPDATE new_peer_requests SET
+-- name: CancelPeerRequest :one
+UPDATE peer_requests SET
     status = 'cancelled'
 WHERE
     random_id = @random_id

@@ -3,6 +3,8 @@ package main
 import (
 	"akhokhlow80/tanlweb/admin"
 	"akhokhlow80/tanlweb/db"
+	"akhokhlow80/tanlweb/peerconfigs"
+	"akhokhlow80/tanlweb/peers"
 	"akhokhlow80/tanlweb/sqlgen"
 	"database/sql"
 	"embed"
@@ -25,6 +27,11 @@ type config struct {
 	RefreshTokenLifetime       int    `env:"REFRESH_TOKEN_LIFETIME_SECS,required"`
 	AccessTokenLifetime        int    `env:"ACCESS_TOKEN_LIFETIME_SECS,required"`
 	RequestKeyRotationInterval int    `env:"REQ_KEY_ROTATION_INTERVAL_SECS,required"`
+	PeerConfigsBaseURI         string `env:"PEER_CONFS_BASE_URI,required"`
+
+	// Peer configs
+
+	PeerConfigsHTTPBind string `env:"PEER_CONFS_HTTP_BIND,required"`
 
 	// Common
 
@@ -66,7 +73,9 @@ func main() {
 		log.Fatalf("Failed to init DB: %s", err)
 	}
 
-	admin, err := admin.NewApp(admin.Config{
+	peerReqCache := peers.NewPendingRequestsCache()
+
+	adminApp, err := admin.NewApp(admin.Config{
 		BaseURI:                    cfg.AdminBaseURI,
 		HTTPBind:                   cfg.AdminHTTPBind,
 		AuthPrivateKey:             cfg.AuthPrivateKey,
@@ -74,22 +83,30 @@ func main() {
 		RefreshTokenLifetime:       cfg.RefreshTokenLifetime,
 		AccessTokenLifetime:        cfg.AccessTokenLifetime,
 		RequestKeyRotationInterval: cfg.RequestKeyRotationInterval,
+		PeerConfigsBaseURI:         cfg.PeerConfigsBaseURI,
 		DebugMode:                  cfg.DebugMode,
-	}, db)
+	}, db, peerReqCache)
 	if err != nil {
 		log.Fatalf("Failed to init admin app: %s", err)
 	}
 
+	peerConfigsApp := peerconfigs.NewApp(peerconfigs.Config{
+		HTTPBind: cfg.PeerConfigsHTTPBind,
+	}, peerReqCache)
+
 	if len(os.Args) == 1 {
-		log.Fatal(admin.Serve())
+		go func() {
+			log.Fatal(adminApp.Serve())
+		}()
+		log.Fatal(peerConfigsApp.Serve())
 	} else if len(os.Args) == 3 && os.Args[1] == "login-token" {
-		loginURL, err := admin.IssueLoginURL(os.Args[2])
+		loginURL, err := adminApp.IssueLoginURL(os.Args[2])
 		if err != nil {
 			log.Fatal(err)
 		}
 		fmt.Println(loginURL)
 	} else if len(os.Args) == 3 && os.Args[1] == "revoke-refresh-tokens" {
-		if err := admin.RevokeRefreshTokens(os.Args[2]); err != nil {
+		if err := adminApp.RevokeRefreshTokens(os.Args[2]); err != nil {
 			log.Fatal(err)
 		}
 	} else {

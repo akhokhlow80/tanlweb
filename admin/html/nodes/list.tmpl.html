@@ -15,8 +15,8 @@
       <tbody>
         {{range .}}
           <tr>
-            <td><a href='{{EncryptURI "nodes/%s" .UUID}}'>{{.Name}}</a></td>
-            <td>{{.BaseURI}}</td>
+            <td><a href='{{EncryptURI "nodes/%s" .Node.UUID}}'>{{.Node.Name}}</a></td>
+            <td>{{.Node.BaseURI}}</td>
           </tr>
         {{end}}
       </tbody>

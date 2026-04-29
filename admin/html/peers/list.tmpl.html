@@ -5,10 +5,10 @@
   </head>
   <body>
     {{template "navigation" "peers"}}
-    {{if .NewRequests}}
+    {{if .Requests}}
       <details>
         <summary>
-          Requests ({{len .NewRequests}})
+          Pending requests ({{len .Requests}})
         </summary>
         <table>
           <thead>
@@ -21,7 +21,7 @@
             </tr>
           </thead>
           <tbody>
-            {{range .NewRequests}}
+            {{range .Requests}}
               <tr>
                 <td>
                   <a href='{{EncryptURI "peers/requests/%s" .RandomID}}'>{{.ShortRandomID}}</a>
@@ -53,6 +53,41 @@
         </table>
       </details>
     {{end}}
+    {{if .ErrorMessage}}
+      <p class="load-peers-error">
+          Failed to load peers from some nodes: {{.ErrorMessage}}
+      </p>
+    {{end}}
+    <table>
+      <thead>
+        <tr>
+          <td>Public Key</td>
+          <td>Owner</td>
+          <td>Node</td>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Peers}}
+          <tr>
+            <td>
+              <a href='{{EncryptURI "peers/%s" .PublicKey}}'>
+                {{.ShortenPublicKey}}
+              </a>
+            </td>
+            <td>
+              <a href='{{EncryptURI "users/%s" .UserUUID}}'>
+                {{ShortenUUID .UserUUID}}
+              </a>
+            </td>
+            <td>
+              <a href='{{EncryptURI "nodes/%s" .Node.UUID}}'>
+                {{.Node.Name}}
+              </a>
+            </td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
   </body>
 </html>
 

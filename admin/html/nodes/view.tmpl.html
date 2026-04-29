@@ -1,5 +1,5 @@
 <div id="node-view" hx-swap-oob="true">
-  {{if .UUID}}
+  {{if .Node.UUID}}
     <h2>View &amp; edit node</h2>
   {{else}}
     <h2>Add new node</h2>
@@ -8,8 +8,8 @@
   <form
     id="node-config-form"
     hx-swap="none"
-    {{if .UUID}}
-      hx-put='{{EncryptURI "nodes/%s" .UUID}}'
+    {{if .Node.UUID}}
+      hx-put='{{EncryptURI "nodes/%s" .Node.UUID}}'
     {{else}}
       hx-post='{{EncryptURI "nodes"}}'
     {{end}}
@@ -17,16 +17,16 @@
   >
     <label for="name" class="required">Name</label>
     <span id="invalid-name"></span>
-    <input id="name" name="name" type="text" value="{{.Name}}" />
+    <input id="name" name="name" type="text" value="{{.Node.Name}}" />
 
     <label for="base-uri" class="required">Base URI</label>
     <span id="invalid-base-uri"></span>
-    <input id="base-uri" name="base-uri" type="text" value="{{.BaseURI}}" />
+    <input id="base-uri" name="base-uri" type="text" value="{{.Node.BaseURI}}" />
 
     <input
       class="submit"
       type="submit"
-      value="{{if .UUID}}Save{{else}}Create{{end}}"
+      value="{{if .Node.UUID}}Save{{else}}Create{{end}}"
     />
   </form>
 </div>

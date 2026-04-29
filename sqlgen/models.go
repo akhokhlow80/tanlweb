@@ -8,7 +8,14 @@ import (
 	"time"
 )
 
-type NewPeerRequest struct {
+type Node struct {
+	ID      int64
+	Uuid    string
+	Name    string
+	BaseUri string
+}
+
+type PeerRequest struct {
 	ID                  int64
 	RandomID            string
 	InterfaceName       string
@@ -17,13 +24,6 @@ type NewPeerRequest struct {
 	NodeID              int64
 	OwnedByUserID       int64
 	Status              string
-}
-
-type Node struct {
-	ID      int64
-	Uuid    string
-	Name    string
-	BaseUri string
 }
 
 type RequestEncryptionKey struct {

@@ -7,3 +7,11 @@ type Peer struct {
 	Endpoint     string `json:"endpoint"`
 	IsEnabled    bool   `json:"is_enabled"`
 }
+
+func (peer *Peer) ShortenPublicKey() string {
+	if len(peer.PublicKey) != 44 {
+		// ???
+		return peer.PublicKey
+	}
+	return peer.PublicKey[0:4] + "…" + peer.PublicKey[39:43]
+}
