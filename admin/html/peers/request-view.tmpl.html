@@ -21,7 +21,7 @@
       <p class="name">For user:</p>
       <a href='{{EncryptURI "users/%s" .OwnedByUserUUID}}'>{{ShortenUUID .OwnedByUserUUID}}</a>
     </div>
-    {{if not .Status.Completed}}
+    {{if eq .Status .ConstStatus.Pending}}
       <div class="field">
         <p class="name">Requested at:</p>
         <div class="value">
@@ -51,7 +51,7 @@
         <span {{if eq .Status .ConstStatus.Cancelled}}class="current-state"{{end}}>Cancelled</span>
       </p>
     </div>
-    {{if not .Status.Completed}}
+    {{if eq .Status .ConstStatus.Pending}}
       <div
         onclick="copyToClipboard(document.getElementById('config-url').textContent)"
         id="config-url-container"
