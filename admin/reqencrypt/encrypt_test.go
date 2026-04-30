@@ -1,7 +1,7 @@
 package reqencrypt_test
 
 import (
-	"akhokhlow80/tanlweb/reqencrypt"
+	"akhokhlow80/tanlweb/admin/reqencrypt"
 	"bytes"
 	"context"
 	"crypto/rand"
