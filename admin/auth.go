@@ -215,7 +215,7 @@ func (app *App) authenticationMiddleware(h http.Handler) http.Handler {
 	})
 }
 
-func getAuthenticateUser(ctx context.Context) *auth.Subject {
+func getAuthenticatedUser(ctx context.Context) *auth.Subject {
 	subject, ok := ctx.Value(authenticatedUserCtxKey{}).(auth.Subject)
 	if !ok {
 		return nil
@@ -226,7 +226,7 @@ func getAuthenticateUser(ctx context.Context) *auth.Subject {
 // Authorize authenticated user
 // Returns ErrForbidden on insufficient scope.
 func authorize(ctx context.Context, requiredScopes *auth.Scopes) error {
-	subject := getAuthenticateUser(ctx)
+	subject := getAuthenticatedUser(ctx)
 	if subject == nil {
 		return errUnauthorized
 	}

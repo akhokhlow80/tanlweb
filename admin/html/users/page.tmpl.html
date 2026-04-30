@@ -5,7 +5,7 @@
   </head>
   <body>
     <div id="notifications-container"></div>
-    {{template "navigation" "users"}}
+    {{template "navigation" (NavParams .R "users")}}
     <main>
       {{template "users/view" .}}
     </main>

@@ -2,7 +2,6 @@ body {
   font-size: 12pt;
   font-family: 'Hack Nerd Font Mono Regular';
   margin: 15pt;
-  max-width: 500pt;
 }
 
 a {
@@ -14,8 +13,11 @@ a:not([href]) {
   color: #8483eb;
 }
 
-main *:not(h1, h2, h3, div, button, span) {
-  margin-left: 5pt;
+@media only screen and (min-width: 600px) {
+  main *:not(h1, h2, h3, div, button, span, summary) {
+    margin-left: 5pt;
+    max-width: 500pt;
+  }
 }
 
 hr {
@@ -34,18 +36,27 @@ pre.inline {
   padding: 1pt 6pt;
 }
 
+ul {
+  padding-left: 15pt;
+}
+
+summary {
+  margin-top: 10pt;
+}
+
 /* Navigation */
 
 #navigation {
   margin-bottom: 10pt;
+  display: flex;
 }
 
-#navigation > a {
+#navigation a {
   text-decoration: none;
   color: #3483eb;
 }
 
-#navigation > a.current {
+#navigation a.current {
   text-decoration: underline;
 }
 

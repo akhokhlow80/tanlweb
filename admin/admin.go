@@ -67,6 +67,10 @@ func (app *App) initTmpl() error {
 			}
 			return app.encryptURI(fmt.Sprintf(pathFormat, anyValues...))
 		},
+		"AuthUser": func(r *http.Request) auth.Subject {
+			return *getAuthenticatedUser(r.Context())
+		},
+		"NavParams": makeNavigationParams,
 	}
 	app.tmpl = template.New("").Funcs(templateFuncs)
 	htmlFS, err := fs.Sub(htmlTemplates, "html")

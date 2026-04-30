@@ -4,7 +4,7 @@
     {{template "head"}}
   </head>
   <body>
-    {{template "navigation" "nodes"}}
+    {{template "navigation" (NavParams .R "nodes")}}
     <table>
       <thead>
         <tr>
@@ -13,7 +13,7 @@
         </tr>
       </thead>
       <tbody>
-        {{range .}}
+        {{range .Nodes}}
           <tr>
             <td><a href='{{EncryptURI "nodes/%s" .Node.UUID}}'>{{.Node.Name}}</a></td>
             <td>{{.Node.BaseURI}}</td>
@@ -22,7 +22,11 @@
       </tbody>
     </table>
     <form action='{{EncryptURI "nodes/new"}}' method="get">
-      <input type="submit" class="add-new" value="+ Add new" />
+      <input type="submit" class="add-new" value="+ Add new"
+      {{if not (AuthUser .R).Scopes.Nodes.HasW}}
+        disabled
+      {{end}}
+       />
     </form>
   </body>
 </html>

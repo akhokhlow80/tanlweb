@@ -33,17 +33,25 @@ type peerView struct {
 	Error error
 }
 
+type peerViewWithHttpReq struct {
+	R *http.Request
+	peerView
+}
+
 func (app *App) peerPageHandler(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Peers: auth.R}); err != nil {
 		return err
 	}
 
 	pubkey := r.PathValue("public_key")
 
 	peer, errors := app.nodeClients.GetPeer(r.Context(), pubkey)
-	return app.tmpl.ExecuteTemplate(w, "peers/page", peerView{
-		Peer:  peer,
-		Error: errors.Error(),
+	return app.tmpl.ExecuteTemplate(w, "peers/page", peerViewWithHttpReq{
+		R: r,
+		peerView: peerView{
+			Peer:  peer,
+			Error: errors.Error(),
+		},
 	})
 }
 
@@ -53,12 +61,14 @@ type newPeerNodeSelectOption struct {
 }
 
 type newPeerPageView struct {
+	R *http.Request
+
 	UserUUID string
 	Nodes    []newPeerNodeSelectOption
 }
 
 func (app *App) newPeerPageHandler(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Peers: auth.W}); err != nil {
 		return err
 	}
 
@@ -81,6 +91,7 @@ func (app *App) newPeerPageHandler(w http.ResponseWriter, r *http.Request) error
 	}
 
 	return app.tmpl.ExecuteTemplate(w, "peers/new", newPeerPageView{
+		R:        r,
 		UserUUID: userUUID,
 		Nodes:    nodes,
 	})
@@ -96,7 +107,7 @@ func (errs *peerErrors) Ok() bool {
 }
 
 func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Peers: auth.W}); err != nil {
 		return err
 	}
 
@@ -116,7 +127,7 @@ func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
 	}
 	req, err := peers.NewPeerRequest(
 		interfaceName,
-		getAuthenticateUser(r.Context()).ID,
+		getAuthenticatedUser(r.Context()).ID,
 		nodeUUID,
 		userUUID,
 	)
@@ -175,7 +186,7 @@ func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-type newPeerRequestView struct {
+type peerRequestView struct {
 	RandomID            string
 	ShortRandomID       string
 	Status              peers.PeerRequestStatus
@@ -197,24 +208,29 @@ type newPeerRequestView struct {
 	}
 }
 
+type peerRequestViewWithHttpReq struct {
+	R *http.Request
+	peerRequestView
+}
+
 func (app *App) parsePeerRequestViewFromDB(
 	dbReq *sqlgen.PeerRequest,
 	dbOwner *sqlgen.User,
 	dbNode *sqlgen.Node,
-) (newPeerRequestView, error) {
+) (peerRequestView, error) {
 	var requestedBy string
 	if dbReq.RequestedByUserUuid != nil {
 		requestedBy = *dbReq.RequestedByUserUuid
 	}
 	status, err := peers.ParsePeerRequestStatus(dbReq.Status)
 	if err != nil {
-		return newPeerRequestView{}, err
+		return peerRequestView{}, err
 	}
 	var configURL string
 	if status == peers.Pending {
 		configURL = app.cfg.PeerConfigsBaseURI + "/" + url.PathEscape(dbReq.RandomID)
 	}
-	return newPeerRequestView{
+	return peerRequestView{
 		RandomID:            dbReq.RandomID,
 		ShortRandomID:       dbReq.RandomID[31:],
 		Status:              status,
@@ -238,7 +254,7 @@ func (app *App) parsePeerRequestViewFromDB(
 }
 
 func (app *App) peerRequestHandler(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Peers: auth.R}); err != nil {
 		return err
 	}
 
@@ -257,17 +273,26 @@ func (app *App) peerRequestHandler(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		return err
 	}
-	return app.tmpl.ExecuteTemplate(w, "peers/request-page", view)
+	return app.tmpl.ExecuteTemplate(
+		w,
+		"peers/request-page",
+		peerRequestViewWithHttpReq{
+			R:               r,
+			peerRequestView: view,
+		},
+	)
 }
 
 type peersListView struct {
-	Requests     []newPeerRequestView
+	R *http.Request
+
+	Requests     []peerRequestView
 	Peers        []nodes.PeerFromNode
 	ErrorMessage string
 }
 
 func (app *App) peersListHandler(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Peers: auth.R}); err != nil {
 		return err
 	}
 
@@ -279,7 +304,7 @@ func (app *App) peersListHandler(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	reqs := make([]newPeerRequestView, 0, len(dbReqs))
+	reqs := make([]peerRequestView, 0, len(dbReqs))
 	for _, dbReq := range dbReqs {
 		req, err := app.parsePeerRequestViewFromDB(&dbReq.PeerRequest, &dbReq.User, &dbReq.Node)
 		if err != nil {
@@ -298,6 +323,7 @@ func (app *App) peersListHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return app.tmpl.ExecuteTemplate(w, "peers/list", peersListView{
+		R:            r,
 		Requests:     reqs,
 		Peers:        peers,
 		ErrorMessage: errMsg,
@@ -305,7 +331,7 @@ func (app *App) peersListHandler(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (app *App) cancelPeerRequestHandler(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Peers: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Peers: auth.W}); err != nil {
 		return err
 	}
 
@@ -339,7 +365,14 @@ func (app *App) cancelPeerRequestHandler(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		return err
 	}
-	if err := app.tmpl.ExecuteTemplate(w, "peers/request-page", view); err != nil {
+	if err := app.tmpl.ExecuteTemplate(
+		w,
+		"peers/request-page",
+		peerRequestViewWithHttpReq{
+			R:               r,
+			peerRequestView: view,
+		},
+	); err != nil {
 		return err
 	}
 

@@ -1,4 +1,6 @@
 <div id="user-view" hx-swap-oob="true">
+  {{$readonly := not (AuthUser .R).Scopes.Users.HasW}}
+
   {{if .UUID}}
     <h2>View &amp; edit user</h2>
   {{else}}
@@ -15,45 +17,113 @@
     {{end}}
     hx-disabled-elt="find input[type='submit']"
   >
-    <label for="description" class="required">Description (seen only by admins)</label>
-    <input id="description" name="description" type="text" value="{{.Description}}"/>
-
-    <div>
-      <p>Scopes (grant only to admin users)</p>
-      <div>
-        <input type="checkbox" name="scope-nodes"
-          {{if .Scopes.Nodes}}
-            checked
-          {{end}}
-         />
-        <label for="scopes-nodes" class="checkbox">nodes:rw</label>
-      </div>
-
-      <div>
-        <input type="checkbox" name="scope-users"
-          {{if .Scopes.Users}}
-            checked
-          {{end}}
-        />
-        <label for="scope-users" class="checkbox">users:rw</label>
-      </div>
-
-      <div>
-        <input type="checkbox" name="scope-peers"
-          {{if .Scopes.Peers}}
-            checked
-          {{end}}
-        />
-        <label for="scope-peers" class="checkbox">peers:rw</label>
-      </div>
+    <div class="field">
+      <p class="name">UUID:</p>
+      <p class="value">{{.UUID}}</p>
     </div>
 
-    <label for="fee" class="required">Fee (leave empty if you don't want to charge the user)</label>
-    <input id="fee" name="fee" type="text" value="{{.Fee}}" />
+    {{/*TODO: make the description mandatory*/}}
+  
+    <label for="description" class="required">Description (seen only by admins)</label>
+    <input id="description" name="description" type="text" value="{{.Description}}"
+      {{if $readonly}}
+        disabled
+      {{end}}/>
+
+    <details>
+      <summary>Scopes (grant only to admin users)</summary>
+      <ul>
+        <li>
+          nodes
+          <div>
+            <input type="checkbox" name="scope-nodes-read"
+              {{if .Scopes.Nodes.HasR}}
+                checked
+              {{end}}
+              {{if $readonly}}
+                disabled
+              {{end}}
+             />
+            <label for="scope-nodes-read" class="checkbox">:r</label>
+          </div>
+          <div>
+            <input type="checkbox" name="scope-nodes-write"
+              {{if .Scopes.Nodes.HasW}}
+                checked
+              {{end}}
+              {{if $readonly}}
+                disabled
+              {{end}}
+             />
+            <label for="scope-nodes-write" class="checkbox">:w</label>
+          </div>
+        </li>
+        <li>
+          users
+          <div>
+            <input type="checkbox" name="scope-users-read"
+              {{if .Scopes.Users.HasR}}
+                checked
+              {{end}}
+              {{if $readonly}}
+                disabled
+              {{end}}
+            />
+            <label for="scope-users-read" class="checkbox">:r</label>
+          </div>
+          <div>
+            <input type="checkbox" name="scope-users-write"
+              {{if .Scopes.Users.HasW}}
+                checked
+              {{end}}
+              {{if $readonly}}
+                disabled
+              {{end}}
+            />
+            <label for="scope-users-write" class="checkbox">:w</label>
+          </div>
+        </li>
+        <li>
+          peers
+          <div>
+            <input type="checkbox" name="scope-peers-read"
+              {{if .Scopes.Peers.HasR}}
+                checked
+              {{end}}
+              {{if $readonly}}
+                disabled
+              {{end}}
+            />
+            <label for="scope-peers-read" class="checkbox">:r</label>
+          </div>
+          <div>
+            <input type="checkbox" name="scope-peers-write"
+              {{if .Scopes.Peers.HasW}}
+                checked
+              {{end}}
+              {{if $readonly}}
+                disabled
+              {{end}}
+            />
+            <label for="scope-peers-write" class="checkbox">:w</label>
+          </div>
+        </li>
+      </ul>
+    </details>
+
+    <label for="fee">Fee (leave empty if you don't want to charge the user)</label>
+    <input id="fee" name="fee" type="text" value="{{.Fee}}"
+      {{if $readonly}}
+        disabled
+      {{end}}
+    />
 
     <input
       class="submit"
       type="submit"
+      {{if $readonly}}
+        disabled
+      {{end}}
       value="{{if .UUID}}Save{{else}}Create{{end}}"
     />
   </form>
@@ -73,7 +143,7 @@
           type="date"
           name="paid-until"
           value="{{.PaidUntil}}"
-          {{if not .Fee}}
+          {{if or $readonly (not .Fee)}}
             disabled
           {{end}}
         >
@@ -83,7 +153,11 @@
           This user is not charged and won't be suspended after the end of the paid period.
         </p>
       {{else}}
-        <input class="submit" type="submit" value="Update"/>
+        <input class="submit" type="submit" value="Update"
+          {{if $readonly}}
+            disabled
+          {{end}}
+        />
       {{end}}
     </form>
 
@@ -117,14 +191,22 @@
           value="true"
         {{end}}
       />
-      <input class="submit" type="submit" value="{{if .IsBanned}}Unban{{else}}Ban{{end}}"/>
+      <input class="submit" type="submit" value="{{if .IsBanned}}Unban{{else}}Ban{{end}}"
+        {{if $readonly}}
+          disabled
+        {{end}}
+      />
     </form>
 
     <hr>
 
     {{if .UUID}}
       <form action='{{EncryptURI "users/%s/peers/new" .UUID}}' method="get">
-        <input type="submit" class="add-new" value="+ Add new peer" />
+        <input type="submit" class="add-new" value="+ Add new peer"
+          {{if not (AuthUser .R).Scopes.Peers.HasW}}
+            disabled
+          {{end}}
+         />
       </form>
 
       <!-- TODO: peers list -->

@@ -39,13 +39,20 @@ func (app *App) addRootUserIfNotExists(ctx context.Context) error {
 }
 
 func (app *App) registerUsersHandlers(m *http.ServeMux) {
-	m.HandleFunc("GET /users/new", web.FailableHandler(app.standardErrorHandler, app.newUserPage))
-	m.HandleFunc("POST /users", web.FailableHandler(app.htmxErrorHandler, app.putUser))
-	m.HandleFunc("PUT /users/{uuid}", web.FailableHandler(app.htmxErrorHandler, app.putUser))
-	m.HandleFunc("PUT /users/{uuid}/paid-until", web.FailableHandler(app.htmxErrorHandler, app.putUserPaidUntil))
-	m.HandleFunc("PUT /users/{uuid}/ban", web.FailableHandler(app.htmxErrorHandler, app.putUserBan))
-	m.HandleFunc("GET /users/{uuid}", web.FailableHandler(app.standardErrorHandler, app.userPage))
-	m.HandleFunc("GET /users", web.FailableHandler(app.standardErrorHandler, app.usersList))
+	m.HandleFunc("GET /users/new",
+		web.FailableHandler(app.standardErrorHandler, app.newUserPage))
+	m.HandleFunc("POST /users",
+		web.FailableHandler(app.htmxErrorHandler, app.putUser))
+	m.HandleFunc("PUT /users/{uuid}",
+		web.FailableHandler(app.htmxErrorHandler, app.putUser))
+	m.HandleFunc("PUT /users/{uuid}/paid-until",
+		web.FailableHandler(app.htmxErrorHandler, app.putUserPaidUntil))
+	m.HandleFunc("PUT /users/{uuid}/ban",
+		web.FailableHandler(app.htmxErrorHandler, app.putUserBan))
+	m.HandleFunc("GET /users/{uuid}",
+		web.FailableHandler(app.standardErrorHandler, app.userPage))
+	m.HandleFunc("GET /users",
+		web.FailableHandler(app.standardErrorHandler, app.usersList))
 }
 
 type userView struct {
@@ -55,6 +62,11 @@ type userView struct {
 	Scopes      auth.Scopes
 	PaidUntil   string
 	IsBanned    bool
+}
+
+type userViewWithHttpReq struct {
+	userView
+	R *http.Request
 }
 
 func userViewFromDB(dbUser *sqlgen.User) userView {
@@ -77,7 +89,7 @@ func userViewFromDB(dbUser *sqlgen.User) userView {
 }
 
 func (app *App) newUserPage(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Users: auth.W}); err != nil {
 		return err
 	}
 
@@ -85,6 +97,10 @@ func (app *App) newUserPage(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (app *App) putUser(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Users: auth.W}); err != nil {
+		return err
+	}
+
 	if err := r.ParseForm(); err != nil {
 		return errParseForm
 	}
@@ -98,14 +114,23 @@ func (app *App) putUser(w http.ResponseWriter, r *http.Request) error {
 	description := web.FormScalar(r.Form, "description")
 	fee := web.FormTrimmedScalar(r.Form, "fee")
 	var scopes auth.Scopes
-	if web.FormTrimmedScalar(r.Form, "scope-users") == "on" {
-		scopes.Users = true
+	if web.FormTrimmedScalar(r.Form, "scope-users-read") == "on" {
+		scopes.Users |= auth.R
 	}
-	if web.FormTrimmedScalar(r.Form, "scope-nodes") == "on" {
-		scopes.Nodes = true
+	if web.FormTrimmedScalar(r.Form, "scope-users-write") == "on" {
+		scopes.Users |= auth.W
 	}
-	if web.FormTrimmedScalar(r.Form, "scope-peers") == "on" {
-		scopes.Peers = true
+	if web.FormTrimmedScalar(r.Form, "scope-nodes-read") == "on" {
+		scopes.Nodes |= auth.R
+	}
+	if web.FormTrimmedScalar(r.Form, "scope-nodes-write") == "on" {
+		scopes.Nodes |= auth.W
+	}
+	if web.FormTrimmedScalar(r.Form, "scope-peers-read") == "on" {
+		scopes.Peers |= auth.R
+	}
+	if web.FormTrimmedScalar(r.Form, "scope-peers-write") == "on" {
+		scopes.Peers |= auth.W
 	}
 
 	var (
@@ -156,11 +181,17 @@ func (app *App) putUser(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	return app.tmpl.ExecuteTemplate(w, "users/view", userViewFromDB(&dbUser))
+	return app.tmpl.ExecuteTemplate(
+		w,
+		"users/view",
+		userViewWithHttpReq{
+			R:        r,
+			userView: userViewFromDB(&dbUser),
+		})
 }
 
 func (app *App) putUserPaidUntil(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Users: auth.W}); err != nil {
 		return err
 	}
 
@@ -199,11 +230,18 @@ func (app *App) putUserPaidUntil(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	return app.tmpl.ExecuteTemplate(w, "users/view", userViewFromDB(&dbUser))
+	return app.tmpl.ExecuteTemplate(
+		w,
+		"users/view",
+		userViewWithHttpReq{
+			R:        r,
+			userView: userViewFromDB(&dbUser),
+		},
+	)
 }
 
 func (app *App) putUserBan(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Users: auth.W}); err != nil {
 		return err
 	}
 
@@ -242,11 +280,18 @@ func (app *App) putUserBan(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	return app.tmpl.ExecuteTemplate(w, "users/view", userViewFromDB(&dbUser))
+	return app.tmpl.ExecuteTemplate(
+		w,
+		"users/view",
+		userViewWithHttpReq{
+			R:        r,
+			userView: userViewFromDB(&dbUser),
+		},
+	)
 }
 
 func (app *App) userPage(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Users: auth.R}); err != nil {
 		return err
 	}
 
@@ -263,11 +308,23 @@ func (app *App) userPage(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	return app.tmpl.ExecuteTemplate(w, "users/page", userViewFromDB(&dbUser))
+	return app.tmpl.ExecuteTemplate(
+		w,
+		"users/page",
+		userViewWithHttpReq{
+			R:        r,
+			userView: userViewFromDB(&dbUser),
+		},
+	)
+}
+
+type usersListView struct {
+	R     *http.Request
+	Users []userView
 }
 
 func (app *App) usersList(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Users: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Users: auth.R}); err != nil {
 		return err
 	}
 
@@ -284,5 +341,12 @@ func (app *App) usersList(w http.ResponseWriter, r *http.Request) error {
 		user := userViewFromDB(&dbUser)
 		users = append(users, user)
 	}
-	return app.tmpl.ExecuteTemplate(w, "users/list", users)
+	return app.tmpl.ExecuteTemplate(
+		w,
+		"users/list",
+		usersListView{
+			R:     r,
+			Users: users,
+		},
+	)
 }

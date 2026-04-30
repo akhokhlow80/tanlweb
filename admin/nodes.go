@@ -43,8 +43,13 @@ type nodeView struct {
 	Node nodes.Node
 }
 
+type nodeViewWithHTTPReq struct {
+	R *http.Request
+	nodeView
+}
+
 func (app *App) newNodePageHandler(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Nodes: auth.W}); err != nil {
 		return err
 	}
 
@@ -63,7 +68,7 @@ func validateNodeForm(node *nodes.Node) nodeErrors {
 }
 
 func (app *App) addNodeHandler(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Nodes: auth.W}); err != nil {
 		return err
 	}
 
@@ -104,8 +109,11 @@ func (app *App) addNodeHandler(w http.ResponseWriter, r *http.Request) error {
 
 	w.Header().Add("HX-Replace-Url", app.encryptURI("nodes/"+url.PathEscape(node.UUID)))
 
-	err = app.tmpl.ExecuteTemplate(w, "nodes/view", nodeView{
-		Node: node,
+	err = app.tmpl.ExecuteTemplate(w, "nodes/view", nodeViewWithHTTPReq{
+		R: r,
+		nodeView: nodeView{
+			Node: node,
+		},
 	})
 	if err != nil {
 		return err
@@ -115,7 +123,7 @@ func (app *App) addNodeHandler(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (app *App) updateNodeHandler(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Nodes: auth.W}); err != nil {
 		return err
 	}
 
@@ -172,13 +180,16 @@ func (app *App) updateNodeHandler(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 
-	return app.tmpl.ExecuteTemplate(w, "nodes/view", nodeView{
-		Node: node,
+	return app.tmpl.ExecuteTemplate(w, "nodes/view", nodeViewWithHTTPReq{
+		R: r,
+		nodeView: nodeView{
+			Node: node,
+		},
 	})
 }
 
 func (app *App) nodePageHandler(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Nodes: auth.R}); err != nil {
 		return err
 	}
 
@@ -195,17 +206,25 @@ func (app *App) nodePageHandler(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	return app.tmpl.ExecuteTemplate(w, "nodes/page", nodeView{
-		Node: nodes.Node{
-			UUID:    dbNode.Uuid,
-			Name:    dbNode.Name,
-			BaseURI: dbNode.BaseUri,
+	return app.tmpl.ExecuteTemplate(w, "nodes/page", nodeViewWithHTTPReq{
+		R: r,
+		nodeView: nodeView{
+			Node: nodes.Node{
+				UUID:    dbNode.Uuid,
+				Name:    dbNode.Name,
+				BaseURI: dbNode.BaseUri,
+			},
 		},
 	})
 }
 
+type nodesListView struct {
+	R     *http.Request
+	Nodes []nodeView
+}
+
 func (app *App) nodesListHandler(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Nodes: true}); err != nil {
+	if err := authorize(r.Context(), &auth.Scopes{Nodes: auth.R}); err != nil {
 		return err
 	}
 
@@ -228,5 +247,8 @@ func (app *App) nodesListHandler(w http.ResponseWriter, r *http.Request) error {
 		}
 		nodeViews = append(nodeViews, node)
 	}
-	return app.tmpl.ExecuteTemplate(w, "nodes/list", nodeViews)
+	return app.tmpl.ExecuteTemplate(w, "nodes/list", nodesListView{
+		R:     r,
+		Nodes: nodeViews,
+	})
 }

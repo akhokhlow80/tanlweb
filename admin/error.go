@@ -51,7 +51,6 @@ func (app *App) htmxErrorHandler(w http.ResponseWriter, r *http.Request, hErr er
 	case errNotFound:
 		n.Message = hErr.Error()
 	case errUnauthorized:
-		// TODO: why?
 		w.WriteHeader(http.StatusUnauthorized)
 		n.Message = hErr.Error()
 	case errForbidden:

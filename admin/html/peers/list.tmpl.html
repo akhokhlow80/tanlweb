@@ -4,7 +4,7 @@
     {{template "head"}}
   </head>
   <body>
-    {{template "navigation" "peers"}}
+    {{template "navigation" (NavParams .R "peers")}}
     {{if .Requests}}
       <details>
         <summary>

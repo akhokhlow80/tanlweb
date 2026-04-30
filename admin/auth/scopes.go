@@ -2,20 +2,49 @@ package auth
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
+type ScopePermissions int
+
+const (
+	R ScopePermissions = 1
+	W ScopePermissions = 2
+)
+
+func (perm ScopePermissions) String() string {
+	var s string
+	if perm&R != 0 {
+		s += "r"
+	}
+	if perm&W != 0 {
+		s += "w"
+	}
+	return s
+}
+
+func (perm ScopePermissions) HasR() bool {
+	return perm&R != 0
+}
+
+func (perm ScopePermissions) HasW() bool {
+	return perm&W != 0
+}
+
 type Scopes struct {
-	Users bool
-	Nodes bool
-	Peers bool
+	Users ScopePermissions
+	Nodes ScopePermissions
+	Peers ScopePermissions
 }
 
 var FullScope = Scopes{
-	Users: true,
-	Nodes: true,
-	Peers: true,
+	Users: R | W,
+	Nodes: R | W,
+	Peers: R | W,
 }
+
+var scopeRegex = regexp.MustCompile(`^\s*(\w+):(r)?(w)?\s*$`)
 
 func ParseScopes(scopesStr string) (Scopes, error) {
 	var parsed Scopes
@@ -23,14 +52,26 @@ func ParseScopes(scopesStr string) (Scopes, error) {
 		return parsed, nil
 	}
 	for scope := range strings.SplitSeq(scopesStr, ",") {
-		scope = strings.TrimSpace(scope)
-		switch scope {
+		groups := scopeRegex.FindStringSubmatch(scope)
+		if groups == nil {
+			return Scopes{}, fmt.Errorf("Failed to parse scope `%s`", scope)
+		}
+
+		var perm ScopePermissions
+		if groups[2] == "r" {
+			perm |= R
+		}
+		if groups[3] == "w" {
+			perm |= W
+		}
+
+		switch groups[1] {
 		case "users":
-			parsed.Users = true
+			parsed.Users = perm
 		case "nodes":
-			parsed.Nodes = true
+			parsed.Nodes = perm
 		case "peers":
-			parsed.Peers = true
+			parsed.Peers = perm
 		default:
 			return Scopes{}, fmt.Errorf("Unknown scope `%s` found while parsing scopes `%s`", scope, scopesStr)
 		}
@@ -40,24 +81,28 @@ func ParseScopes(scopesStr string) (Scopes, error) {
 
 func (scopes *Scopes) String() string {
 	var scopesArr []string
-	if scopes.Users {
-		scopesArr = append(scopesArr, "users")
+	if scopes.Users != 0 {
+		scopesArr = append(scopesArr, "users:"+scopes.Users.String())
 	}
-	if scopes.Nodes {
-		scopesArr = append(scopesArr, "nodes")
+	if scopes.Nodes != 0 {
+		scopesArr = append(scopesArr, "nodes:"+scopes.Nodes.String())
 	}
-	if scopes.Peers {
-		scopesArr = append(scopesArr, "peers")
+	if scopes.Peers != 0 {
+		scopesArr = append(scopesArr, "peers:"+scopes.Peers.String())
 	}
 	return strings.Join(scopesArr, ",")
 }
 
-func implication(a, b bool) bool {
+func impl(a, b bool) bool {
 	return !a || b
 }
 
+func permImpl(a, b ScopePermissions) bool {
+	return impl(a&R != 0, b&R != 0) && impl(a&W != 0, b&W != 0)
+}
+
 func (scopes *Scopes) MatchRequired(required *Scopes) bool {
-	return implication(required.Users, scopes.Users) &&
-		implication(required.Nodes, scopes.Nodes) &&
-		implication(required.Peers, scopes.Peers)
+	return permImpl(required.Users, scopes.Users) &&
+		permImpl(required.Nodes, scopes.Nodes) &&
+		permImpl(required.Peers, scopes.Peers)
 }

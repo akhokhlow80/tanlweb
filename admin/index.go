@@ -10,16 +10,16 @@ func (app *App) registerIndexPage(m *http.ServeMux) {
 }
 
 func (app *App) indexPageHandler(w http.ResponseWriter, r *http.Request) error {
-	user := getAuthenticateUser(r.Context())
-	if user.Scopes.Peers {
+	user := getAuthenticatedUser(r.Context())
+	if user.Scopes.Peers != 0 {
 		w.Header().Set("Location", app.encryptURI("peers"))
 		w.WriteHeader(http.StatusSeeOther)
 		return nil
-	} else if user.Scopes.Users {
+	} else if user.Scopes.Users != 0 {
 		w.Header().Set("Location", app.encryptURI("users"))
 		w.WriteHeader(http.StatusSeeOther)
 		return nil
-	} else if user.Scopes.Nodes {
+	} else if user.Scopes.Nodes != 0 {
 		w.Header().Set("Location", app.encryptURI("nodes"))
 		w.WriteHeader(http.StatusSeeOther)
 		return nil

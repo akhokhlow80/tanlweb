@@ -1,20 +1,32 @@
 <div id="navigation">
-  <a
-    href='{{ EncryptURI "peers" }}'
-    {{if eq . `peers`}}
-      class="current"
+  <div>
+    {{$outer := .}}
+    {{with $peersR := (AuthUser .R).Scopes.Peers.HasR}}
+      <a
+        href='{{ EncryptURI "peers" }}'
+        {{if eq $outer.Resource `peers`}}
+          class="current"
+        {{end}}
+      >Peers</a>
     {{end}}
-    >Peers</a>
-  <a
-    href='{{ EncryptURI "users" }}'
-    {{if eq . `users`}}
-      class="current"
+    {{with $usersR := (AuthUser .R).Scopes.Users.HasR}}
+      <a
+        href='{{ EncryptURI "users" }}'
+        {{if eq $outer.Resource `users`}}
+          class="current"
+        {{end}}
+      >Users</a>
     {{end}}
-    >Users</a>
-  <a
-    href='{{ EncryptURI "nodes" }}'
-    {{if eq . `nodes`}}
-      class="current"
+    {{with $nodesR := (AuthUser .R).Scopes.Nodes.HasR}}
+      <a
+        href='{{ EncryptURI "nodes" }}'
+        {{if eq $outer.Resource `nodes`}}
+          class="current"
+        {{end}}
+      >Nodes</a>
     {{end}}
-    >Nodes</a>
+  </div>
+  {{if (AuthUser .R).Scopes.Users.HasR}}
+    <a style="margin-left: auto" href='{{EncryptURI "users/%s" (AuthUser .R).ID}}'>Me</a>
+  {{end}}
 </div>

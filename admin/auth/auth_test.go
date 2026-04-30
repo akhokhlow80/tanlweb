@@ -1,7 +1,7 @@
 package auth_test
 
 import (
-	"akhokhlow80/tanlweb/auth"
+	"akhokhlow80/tanlweb/admin/auth"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -74,7 +74,7 @@ func newSerivce(
 	}
 	user1 = auth.StoredSubject{
 		ID:                  "user1",
-		Scopes:              auth.Scopes{Users: true, Nodes: true, Peers: true},
+		Scopes:              auth.Scopes{Users: auth.R, Nodes: auth.W, Peers: auth.R | auth.W},
 		LoginTokenVersion:   0,
 		RefreshTokenVersion: 0,
 	}
@@ -331,7 +331,7 @@ func TestAccessTokenSubjectAfterRenewal(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	user0.Scopes.Nodes = true
+	user0.Scopes.Nodes = auth.R
 	var user0Sub = auth.Subject{
 		ID:     user0.ID,
 		Scopes: user0.Scopes,

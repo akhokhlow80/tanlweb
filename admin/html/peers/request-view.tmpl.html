@@ -9,10 +9,14 @@
     {{else if eq .Status .ConstStatus.Cancelled}}
       <span class="request-cancelled">&#10007;</span>
     {{end}}
-    New peer request {{.ShortRandomID}}
+    Peer request
   </h2>
 
   <div class="fields-container">
+    <div class="field">
+      <p class="name">Rnd ID:</p>
+      <p class="value">{{.RandomID}}</p>
+    </div>
     <div class="field">
       <p class="name">Node:</p>
       <a href='{{EncryptURI "nodes/%s" .NodeUUID}}'>{{.NodeName}}</a>
@@ -64,7 +68,13 @@
         hx-swap="none"
         hx-post='{{EncryptURI "peers/requests/%s/cancel" .RandomID}}'
         hx-disabled-elt="find input[type='submit']">
-        <input type="submit" value="Cancel">
+        <input
+          type="submit"
+          value="Cancel"
+          {{if not (AuthUser .R).Scopes.Peers.HasW}}
+            disabled
+          {{end}}
+        />
       </form>
     {{end}}
   </div>

@@ -4,7 +4,7 @@
     {{template "head"}}
   </head>
   <body>
-    {{template "navigation" "users"}}
+    {{template "navigation" (NavParams .R "users")}}
     <table>
       <thead>
         <tr>
@@ -14,7 +14,7 @@
         </tr>
       </thead>
       <tbody>
-        {{range .}}
+        {{range .Users}}
           <tr>
             <td><a href='{{EncryptURI "users/%s" .UUID}}'>{{slice .UUID 24}}</a></td>
             <td>{{.Description}}</td>
@@ -23,9 +23,11 @@
         {{end}}
       </tbody>
     </table>
-    <form action='{{EncryptURI "users/new"}}' method="get">
-      <input type="submit" class="add-new" value="+ Add new" />
-    </form>
+    {{if (AuthUser .R).Scopes.Users.HasW}}
+      <form action='{{EncryptURI "users/new"}}' method="get">
+        <input type="submit" class="add-new" value="+ Add new" />
+      </form>
+    {{end}}
   </body>
 </html>
 

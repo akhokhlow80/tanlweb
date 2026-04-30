@@ -1,4 +1,6 @@
 <div id="node-view" hx-swap-oob="true">
+  {{$readonly := not (AuthUser .R).Scopes.Nodes.HasW}}
+
   {{if .Node.UUID}}
     <h2>View &amp; edit node</h2>
   {{else}}
@@ -17,16 +19,27 @@
   >
     <label for="name" class="required">Name</label>
     <span id="invalid-name"></span>
-    <input id="name" name="name" type="text" value="{{.Node.Name}}" />
+    <input id="name" name="name" type="text" value="{{.Node.Name}}"
+      {{if $readonly}}
+        disabled
+      {{end}}
+    />
 
     <label for="base-uri" class="required">Base URI</label>
     <span id="invalid-base-uri"></span>
-    <input id="base-uri" name="base-uri" type="text" value="{{.Node.BaseURI}}" />
+    <input id="base-uri" name="base-uri" type="text" value="{{.Node.BaseURI}}"
+      {{if $readonly}}
+        disabled
+      {{end}}
+    />
 
     <input
       class="submit"
       type="submit"
       value="{{if .Node.UUID}}Save{{else}}Create{{end}}"
+      {{if $readonly}}
+        disabled
+      {{end}}
     />
   </form>
 </div>
