@@ -151,6 +151,9 @@ func (client *Client) GetPeer(ctx context.Context, pubkey string) (*PeerFromNode
 	}
 	httpClient := &http.Client{}
 	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GET %s returned code %d", uri, resp.StatusCode)
 	}
