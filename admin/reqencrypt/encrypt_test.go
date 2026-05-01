@@ -316,8 +316,6 @@ func TestMiddleware(t *testing.T) {
 
 		}
 
-		println("URI ", r.URL.String())
-
 		if r.URL.Path != "/ping" {
 			t.Errorf("Path is corrupted")
 		}
