@@ -137,6 +137,16 @@ FROM peer_requests
     JOIN users AS owners on owners.id = peer_requests.owned_by_user_id
 ORDER BY requested_at DESC;
 
+-- name: GetUncompletedPeerRequestsForUser :many
+SELECT sqlc.embed(peer_requests), sqlc.embed(owners), sqlc.embed(nodes)
+FROM peer_requests
+    JOIN nodes on nodes.id = peer_requests.node_id
+    JOIN users AS owners on owners.id = peer_requests.owned_by_user_id
+WHERE
+    owners.uuid = @user_uuid AND
+    status NOT IN ('created', 'failed', 'cancelled')
+ORDER BY requested_at DESC;
+
 -- name: UpdatePeerRequest :execrows
 UPDATE peer_requests SET
     interface_name = @interface_name,

@@ -208,7 +208,7 @@ type peerRequestView struct {
 	}
 }
 
-type peerRequestViewWithHttpReq struct {
+type singlePeerRequestView struct {
 	R *http.Request
 	peerRequestView
 }
@@ -276,7 +276,7 @@ func (app *App) peerRequestHandler(w http.ResponseWriter, r *http.Request) error
 	return app.tmpl.ExecuteTemplate(
 		w,
 		"peers/request-page",
-		peerRequestViewWithHttpReq{
+		singlePeerRequestView{
 			R:               r,
 			peerRequestView: view,
 		},
@@ -368,7 +368,7 @@ func (app *App) cancelPeerRequestHandler(w http.ResponseWriter, r *http.Request)
 	if err := app.tmpl.ExecuteTemplate(
 		w,
 		"peers/request-page",
-		peerRequestViewWithHttpReq{
+		singlePeerRequestView{
 			R:               r,
 			peerRequestView: view,
 		},

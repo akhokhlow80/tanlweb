@@ -2,6 +2,8 @@ package admin
 
 import (
 	"akhokhlow80/tanlweb/admin/auth"
+	"akhokhlow80/tanlweb/nodes"
+	"akhokhlow80/tanlweb/peers"
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
 	"context"
@@ -40,19 +42,19 @@ func (app *App) addRootUserIfNotExists(ctx context.Context) error {
 
 func (app *App) registerUsersHandlers(m *http.ServeMux) {
 	m.HandleFunc("GET /users/new",
-		web.FailableHandler(app.standardErrorHandler, app.newUserPage))
+		web.FailableHandler(app.standardErrorHandler, app.newUserPageHandler))
 	m.HandleFunc("POST /users",
-		web.FailableHandler(app.htmxErrorHandler, app.putUser))
+		web.FailableHandler(app.htmxErrorHandler, app.putUserHandler))
 	m.HandleFunc("PUT /users/{uuid}",
-		web.FailableHandler(app.htmxErrorHandler, app.putUser))
+		web.FailableHandler(app.htmxErrorHandler, app.putUserHandler))
 	m.HandleFunc("PUT /users/{uuid}/paid-until",
-		web.FailableHandler(app.htmxErrorHandler, app.putUserPaidUntil))
+		web.FailableHandler(app.htmxErrorHandler, app.putUserPaidUntilHandler))
 	m.HandleFunc("PUT /users/{uuid}/ban",
-		web.FailableHandler(app.htmxErrorHandler, app.putUserBan))
+		web.FailableHandler(app.htmxErrorHandler, app.putUserBanHandler))
 	m.HandleFunc("GET /users/{uuid}",
-		web.FailableHandler(app.standardErrorHandler, app.userPage))
+		web.FailableHandler(app.standardErrorHandler, app.userPageHandler))
 	m.HandleFunc("GET /users",
-		web.FailableHandler(app.standardErrorHandler, app.usersList))
+		web.FailableHandler(app.standardErrorHandler, app.usersListHandler))
 }
 
 type userView struct {
@@ -64,9 +66,16 @@ type userView struct {
 	IsBanned    bool
 }
 
-type userViewWithHttpReq struct {
+type userOwnedPeers struct {
+	Peers               []nodes.PeerFromNode
+	PeersRetrievalError error
+	PendingPeerRequests []peers.PeerRequest
+}
+
+type singleUserView struct {
 	userView
-	R *http.Request
+	Owned *userOwnedPeers
+	R     *http.Request
 }
 
 func userViewFromDB(dbUser *sqlgen.User) userView {
@@ -88,15 +97,15 @@ func userViewFromDB(dbUser *sqlgen.User) userView {
 	}
 }
 
-func (app *App) newUserPage(w http.ResponseWriter, r *http.Request) error {
+func (app *App) newUserPageHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Users: auth.W}); err != nil {
 		return err
 	}
 
-	return app.tmpl.ExecuteTemplate(w, "users/page", userViewWithHttpReq{R: r})
+	return app.tmpl.ExecuteTemplate(w, "users/page", singleUserView{R: r})
 }
 
-func (app *App) putUser(w http.ResponseWriter, r *http.Request) error {
+func (app *App) putUserHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Users: auth.W}); err != nil {
 		return err
 	}
@@ -134,8 +143,9 @@ func (app *App) putUser(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	var (
-		dbUser sqlgen.User
-		err    error
+		dbUser     sqlgen.User
+		ownedPeers *userOwnedPeers
+		err        error
 	)
 	if addNew {
 		dbUser, err = func() (sqlgen.User, error) {
@@ -157,6 +167,12 @@ func (app *App) putUser(w http.ResponseWriter, r *http.Request) error {
 		}
 
 		w.Header().Add("HX-Replace-Url", app.encryptURI("users/"+url.PathEscape(dbUser.Uuid)))
+
+		ownedPeers = &userOwnedPeers{
+			Peers:               nil,
+			PeersRetrievalError: nil,
+			PendingPeerRequests: nil,
+		}
 	} else {
 		dbUser, err = func() (sqlgen.User, error) {
 			defer app.db.Unlock()
@@ -184,13 +200,14 @@ func (app *App) putUser(w http.ResponseWriter, r *http.Request) error {
 	return app.tmpl.ExecuteTemplate(
 		w,
 		"users/view",
-		userViewWithHttpReq{
+		singleUserView{
 			R:        r,
+			Owned:    ownedPeers,
 			userView: userViewFromDB(&dbUser),
 		})
 }
 
-func (app *App) putUserPaidUntil(w http.ResponseWriter, r *http.Request) error {
+func (app *App) putUserPaidUntilHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Users: auth.W}); err != nil {
 		return err
 	}
@@ -233,14 +250,15 @@ func (app *App) putUserPaidUntil(w http.ResponseWriter, r *http.Request) error {
 	return app.tmpl.ExecuteTemplate(
 		w,
 		"users/view",
-		userViewWithHttpReq{
-			R:        r,
+		singleUserView{
 			userView: userViewFromDB(&dbUser),
+			Owned:    nil,
+			R:        r,
 		},
 	)
 }
 
-func (app *App) putUserBan(w http.ResponseWriter, r *http.Request) error {
+func (app *App) putUserBanHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Users: auth.W}); err != nil {
 		return err
 	}
@@ -283,23 +301,32 @@ func (app *App) putUserBan(w http.ResponseWriter, r *http.Request) error {
 	return app.tmpl.ExecuteTemplate(
 		w,
 		"users/view",
-		userViewWithHttpReq{
+		singleUserView{
 			R:        r,
+			Owned:    nil,
 			userView: userViewFromDB(&dbUser),
 		},
 	)
 }
 
-func (app *App) userPage(w http.ResponseWriter, r *http.Request) error {
+func (app *App) userPageHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Users: auth.R}); err != nil {
 		return err
 	}
 
-	uuid := r.PathValue("uuid")
-	dbUser, err := func() (sqlgen.User, error) {
+	userUuid := r.PathValue("uuid")
+	dbUser, dbReqs, err := func() (sqlgen.User, []sqlgen.GetUncompletedPeerRequestsForUserRow, error) {
 		defer app.db.RUnlock()
 		app.db.RLock()
-		return app.db.GetUser(r.Context(), uuid)
+		user, err := app.db.GetUser(r.Context(), userUuid)
+		if err != nil {
+			return sqlgen.User{}, nil, err
+		}
+		dbReqs, err := app.db.GetUncompletedPeerRequestsForUser(r.Context(), userUuid)
+		if err != nil {
+			return sqlgen.User{}, nil, err
+		}
+		return user, dbReqs, nil
 	}()
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -308,12 +335,28 @@ func (app *App) userPage(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
+	reqs := make([]peers.PeerRequest, 0, len(dbReqs))
+	for _, dbReq := range dbReqs {
+		req, err := parsePeerRequestFromDB(&dbReq.PeerRequest, &dbReq.User, &dbReq.Node)
+		if err != nil {
+			return err
+		}
+		reqs = append(reqs, req)
+	}
+
+	peers, errsByNode := app.nodeClients.GetUserPeers(r.Context(), userUuid)
+
 	return app.tmpl.ExecuteTemplate(
 		w,
 		"users/page",
-		userViewWithHttpReq{
-			R:        r,
+		singleUserView{
 			userView: userViewFromDB(&dbUser),
+			Owned: &userOwnedPeers{
+				Peers:               peers,
+				PeersRetrievalError: errsByNode.Error(),
+				PendingPeerRequests: reqs,
+			},
+			R: r,
 		},
 	)
 }
@@ -323,7 +366,7 @@ type usersListView struct {
 	Users []userView
 }
 
-func (app *App) usersList(w http.ResponseWriter, r *http.Request) error {
+func (app *App) usersListHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := authorize(r.Context(), &auth.Scopes{Users: auth.R}); err != nil {
 		return err
 	}

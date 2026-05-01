@@ -379,6 +379,71 @@ func (q *Queries) GetRequestEncryptionKeys(ctx context.Context) (RequestEncrypti
 	return i, err
 }
 
+const getUncompletedPeerRequestsForUser = `-- name: GetUncompletedPeerRequestsForUser :many
+SELECT peer_requests.id, peer_requests.random_id, peer_requests.interface_name, peer_requests.requested_at, peer_requests.requested_by_user_uuid, peer_requests.node_id, peer_requests.owned_by_user_id, peer_requests.status, owners.id, owners.uuid, owners.description, owners.scopes, owners.fee, owners.paid_until, owners.is_banned, owners.login_token_version, owners.refresh_token_version, nodes.id, nodes.uuid, nodes.name, nodes.base_url, nodes.tls_client_key, nodes.tls_client_cert, nodes.tls_server_cert
+FROM peer_requests
+    JOIN nodes on nodes.id = peer_requests.node_id
+    JOIN users AS owners on owners.id = peer_requests.owned_by_user_id
+WHERE
+    owners.uuid = ?1 AND
+    status NOT IN ('created', 'failed', 'cancelled')
+ORDER BY requested_at DESC
+`
+
+type GetUncompletedPeerRequestsForUserRow struct {
+	PeerRequest PeerRequest
+	User        User
+	Node        Node
+}
+
+func (q *Queries) GetUncompletedPeerRequestsForUser(ctx context.Context, userUuid string) ([]GetUncompletedPeerRequestsForUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUncompletedPeerRequestsForUser, userUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUncompletedPeerRequestsForUserRow
+	for rows.Next() {
+		var i GetUncompletedPeerRequestsForUserRow
+		if err := rows.Scan(
+			&i.PeerRequest.ID,
+			&i.PeerRequest.RandomID,
+			&i.PeerRequest.InterfaceName,
+			&i.PeerRequest.RequestedAt,
+			&i.PeerRequest.RequestedByUserUuid,
+			&i.PeerRequest.NodeID,
+			&i.PeerRequest.OwnedByUserID,
+			&i.PeerRequest.Status,
+			&i.User.ID,
+			&i.User.Uuid,
+			&i.User.Description,
+			&i.User.Scopes,
+			&i.User.Fee,
+			&i.User.PaidUntil,
+			&i.User.IsBanned,
+			&i.User.LoginTokenVersion,
+			&i.User.RefreshTokenVersion,
+			&i.Node.ID,
+			&i.Node.Uuid,
+			&i.Node.Name,
+			&i.Node.BaseUrl,
+			&i.Node.TlsClientKey,
+			&i.Node.TlsClientCert,
+			&i.Node.TlsServerCert,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUser = `-- name: GetUser :one
 SELECT id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version FROM users
 WHERE uuid = ?1
