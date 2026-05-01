@@ -10,6 +10,7 @@
   <form
     id="user-config-form"
     hx-swap="none"
+    autocomplete="off"
     {{if .UUID}}
       hx-put='{{EncryptURI "users/%s" .UUID}}'
     {{else}}
@@ -133,6 +134,7 @@
 
     <form
       id="user-paid-until-form"
+      autocomplete="off"
       hx-swap="none"
       hx-put='{{EncryptURI "users/%s/paid-until" .UUID}}'
       hx-disabled-elt="find input[type='submit']"
@@ -165,6 +167,7 @@
   
     <form
       id="user-status-form"
+      autocomplete="off"
       hx-swap="none"
       hx-put='{{EncryptURI "users/%s/ban" .UUID}}'
       hx-disabled-elt="find input[type='submit']"

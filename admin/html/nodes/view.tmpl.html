@@ -9,6 +9,7 @@
 
   <form
     id="node-config-form"
+    autocomplete="off"
     hx-swap="none"
     {{if not .New}}
       hx-put='{{EncryptURI "nodes/%s" .Node.UUID.String}}'
