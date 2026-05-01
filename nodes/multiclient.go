@@ -21,7 +21,7 @@ func NewMultiClient() *MultiClient {
 func (mc *MultiClient) Put(client *Client) {
 	defer mc.Unlock()
 	mc.Lock()
-	mc.clients[client.Node.UUID] = client
+	mc.clients[client.Node.UUID.String()] = client
 }
 
 func (mc *MultiClient) GetClient(nodeUUID string) *Client {
@@ -116,7 +116,7 @@ func runParallelRequests[R any](
 					errCh <- struct {
 						nodeUUID string
 						err      error
-					}{client.Node.UUID, err}
+					}{client.Node.UUID.String(), err}
 				} else {
 					resultCh <- r
 				}
@@ -137,6 +137,7 @@ func runParallelRequests[R any](
 	return rs, newErrorsByNode(errorsByNode)
 }
 
+// Owner is optional; calling with empty will result in return of all peers from the node.
 func (mc *MultiClient) getPeersByOwner(ctx context.Context, owner string) ([]PeerFromNode, ErrorsByNode) {
 	result, errs := runParallelRequests(ctx, mc, func(ctx context.Context, client *Client) ([]PeerFromNode, error) {
 		return client.getPeersByOwner(ctx, owner)
@@ -149,14 +150,13 @@ func (mc *MultiClient) getPeersByOwner(ctx context.Context, owner string) ([]Pee
 	return merged, errs
 }
 
-// Owner is optional; calling with empty will result in return of all peers from the node.
-// Result may be partially succesful.
+// Will return partial result if some of the clients fail.
 func (mc *MultiClient) GetPeers(ctx context.Context) ([]PeerFromNode, ErrorsByNode) {
 	return mc.getPeersByOwner(ctx, "")
 }
 
 // Returns nil peer if not found
-// Result may be partially succesful.
+// Will return partial result if some of the clients fail.
 func (mc *MultiClient) GetPeer(ctx context.Context, pubkey string) (*PeerFromNode, ErrorsByNode) {
 	results, err := runParallelRequests(ctx, mc, func(ctx context.Context, client *Client) (*PeerFromNode, error) {
 		return client.GetPeer(ctx, pubkey)
@@ -169,7 +169,7 @@ func (mc *MultiClient) GetPeer(ctx context.Context, pubkey string) (*PeerFromNod
 	return nil, err
 }
 
-// Result may be partially succesful.
+// Will return partial result if some of the clients fail.
 func (mc *MultiClient) GetUserPeers(ctx context.Context, userUUID string) ([]PeerFromNode, ErrorsByNode) {
 	return mc.getPeersByOwner(ctx, userUUID)
 }

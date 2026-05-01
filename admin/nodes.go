@@ -28,23 +28,18 @@ func (app *App) registerNodeHandlers(m *http.ServeMux) {
 		web.FailableHandler(app.standardErrorHandler, app.nodesListHandler))
 }
 
-type nodeErrors struct {
-	NameEmpty    bool
-	BaseURIEmpty bool
-
+type nodeErrorsView struct {
+	nodes.NodeParseErrors
 	NameNotUnique bool
 }
 
-func (errs *nodeErrors) Ok() bool {
-	return !(errs.NameEmpty || errs.BaseURIEmpty || errs.NameNotUnique)
-}
-
 type nodeView struct {
-	Node nodes.Node
+	nodes.Node
 }
 
-type nodeViewWithHTTPReq struct {
-	R *http.Request
+type singleNodeView struct {
+	R   *http.Request
+	New bool
 	nodeView
 }
 
@@ -53,18 +48,10 @@ func (app *App) newNodePageHandler(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 
-	return app.tmpl.ExecuteTemplate(w, "nodes/page", nil)
-}
-
-func validateNodeForm(node *nodes.Node) nodeErrors {
-	var validationErrors nodeErrors
-	if len(node.Name) == 0 {
-		validationErrors.NameEmpty = true
-	}
-	if len(node.BaseURI) == 0 {
-		validationErrors.BaseURIEmpty = true
-	}
-	return validationErrors
+	return app.tmpl.ExecuteTemplate(w, "nodes/page", singleNodeView{
+		New: true,
+		R:   r,
+	})
 }
 
 func (app *App) addNodeHandler(w http.ResponseWriter, r *http.Request) error {
@@ -76,28 +63,37 @@ func (app *App) addNodeHandler(w http.ResponseWriter, r *http.Request) error {
 		return errParseForm
 	}
 
-	node := nodes.Node{
-		UUID:    uuid.NewString(),
-		BaseURI: web.FormTrimmedScalar(r.Form, "base-uri"),
-		Name:    web.FormTrimmedScalar(r.Form, "name"),
-	}
-	validationErrors := validateNodeForm(&node)
-	if !validationErrors.Ok() {
-		return app.tmpl.ExecuteTemplate(w, "nodes/invalid", validationErrors)
+	node, parseErrs := nodes.ParseNode(
+		uuid.NewString(),
+		web.FormTrimmedScalar(r.Form, "base-url"),
+		web.FormTrimmedScalar(r.Form, "name"),
+		nodes.TLSClientConfig{
+			ClientKey:  web.FormTrimmedScalar(r.Form, "tls-client-key"),
+			ClientCert: web.FormTrimmedScalar(r.Form, "tls-client-cert"),
+			ServerCert: web.FormTrimmedScalar(r.Form, "tls-server-cert"),
+		},
+	)
+	if parseErrs != nil {
+		return app.tmpl.ExecuteTemplate(w, "nodes/invalid", nodeErrorsView{
+			NodeParseErrors: *parseErrs,
+		})
 	}
 
 	_, err := func() (sqlgen.Node, error) {
 		defer app.db.Unlock()
 		app.db.Lock()
 		return app.db.AddNode(r.Context(), sqlgen.AddNodeParams{
-			Uuid:    node.UUID,
-			Name:    node.Name,
-			BaseUri: node.BaseURI,
+			Uuid:          node.UUID.String(),
+			Name:          node.Name,
+			BaseUrl:       node.BaseURL.String(),
+			TlsClientKey:  node.TLSConf.ClientKey,
+			TlsClientCert: node.TLSConf.ClientCert,
+			TlsServerCert: node.TLSConf.ServerCert,
 		})
 	}()
 	if err != nil {
 		if db.IsConstraintErr(err) {
-			return app.tmpl.ExecuteTemplate(w, "nodes/invalid", nodeErrors{
+			return app.tmpl.ExecuteTemplate(w, "nodes/invalid", nodeErrorsView{
 				NameNotUnique: true,
 			})
 		} else {
@@ -107,10 +103,11 @@ func (app *App) addNodeHandler(w http.ResponseWriter, r *http.Request) error {
 
 	app.nodeClients.Put(nodes.NewClient(node))
 
-	w.Header().Add("HX-Replace-Url", app.encryptURI("nodes/"+url.PathEscape(node.UUID)))
+	w.Header().Add("HX-Replace-Url", app.encryptURI("nodes/"+url.PathEscape(node.UUID.String())))
 
-	err = app.tmpl.ExecuteTemplate(w, "nodes/view", nodeViewWithHTTPReq{
-		R: r,
+	err = app.tmpl.ExecuteTemplate(w, "nodes/view", singleNodeView{
+		R:   r,
+		New: false,
 		nodeView: nodeView{
 			Node: node,
 		},
@@ -131,28 +128,37 @@ func (app *App) updateNodeHandler(w http.ResponseWriter, r *http.Request) error 
 		return errParseForm
 	}
 
-	node := nodes.Node{
-		UUID:    r.PathValue("uuid"),
-		BaseURI: web.FormTrimmedScalar(r.Form, "base-uri"),
-		Name:    web.FormTrimmedScalar(r.Form, "name"),
-	}
-	validationErrors := validateNodeForm(&node)
-	if !validationErrors.Ok() {
-		return app.tmpl.ExecuteTemplate(w, "nodes/invalid", validationErrors)
+	node, parseErrs := nodes.ParseNode(
+		r.PathValue("uuid"),
+		web.FormTrimmedScalar(r.Form, "base-url"),
+		web.FormTrimmedScalar(r.Form, "name"),
+		nodes.TLSClientConfig{
+			ClientKey:  web.FormTrimmedScalar(r.Form, "tls-client-key"),
+			ClientCert: web.FormTrimmedScalar(r.Form, "tls-client-cert"),
+			ServerCert: web.FormTrimmedScalar(r.Form, "tls-server-cert"),
+		},
+	)
+	if parseErrs != nil {
+		return app.tmpl.ExecuteTemplate(w, "nodes/invalid", nodeErrorsView{
+			NodeParseErrors: *parseErrs,
+		})
 	}
 
 	dbNode, err := func() (sqlgen.Node, error) {
 		defer app.db.Unlock()
 		app.db.Lock()
 		return app.db.UpdateNode(r.Context(), sqlgen.UpdateNodeParams{
-			Uuid:    node.UUID,
-			Name:    node.Name,
-			BaseUri: node.BaseURI,
+			Uuid:          node.UUID.String(),
+			Name:          node.Name,
+			BaseUrl:       node.BaseURL.String(),
+			TlsClientKey:  node.TLSConf.ClientKey,
+			TlsClientCert: node.TLSConf.ClientCert,
+			TlsServerCert: node.TLSConf.ServerCert,
 		})
 	}()
 	if err != nil {
 		if db.IsConstraintErr(err) {
-			return app.tmpl.ExecuteTemplate(w, "nodes/invalid", nodeErrors{
+			return app.tmpl.ExecuteTemplate(w, "nodes/invalid", nodeErrorsView{
 				NameNotUnique: true,
 			})
 		} else if errors.Is(err, sql.ErrNoRows) {
@@ -162,13 +168,21 @@ func (app *App) updateNodeHandler(w http.ResponseWriter, r *http.Request) error 
 		}
 	}
 
-	node = nodes.Node{
-		UUID:    dbNode.Uuid,
-		BaseURI: dbNode.BaseUri,
-		Name:    dbNode.Name,
+	node, parseErrs = nodes.ParseNode(
+		dbNode.Uuid,
+		dbNode.BaseUrl,
+		dbNode.Name,
+		nodes.TLSClientConfig{
+			ClientKey:  dbNode.TlsClientKey,
+			ClientCert: dbNode.TlsClientCert,
+			ServerCert: dbNode.TlsServerCert,
+		},
+	)
+	if parseErrs != nil {
+		return parseErrs
 	}
 
-	client := app.nodeClients.GetClient(node.UUID)
+	client := app.nodeClients.GetClient(node.UUID.String())
 	if client == nil {
 		// impossible
 		return fmt.Errorf("No client found for node %s", node.UUID)
@@ -180,8 +194,9 @@ func (app *App) updateNodeHandler(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 
-	return app.tmpl.ExecuteTemplate(w, "nodes/view", nodeViewWithHTTPReq{
-		R: r,
+	return app.tmpl.ExecuteTemplate(w, "nodes/view", singleNodeView{
+		R:   r,
+		New: false,
 		nodeView: nodeView{
 			Node: node,
 		},
@@ -206,15 +221,23 @@ func (app *App) nodePageHandler(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	return app.tmpl.ExecuteTemplate(w, "nodes/page", nodeViewWithHTTPReq{
-		R: r,
-		nodeView: nodeView{
-			Node: nodes.Node{
-				UUID:    dbNode.Uuid,
-				Name:    dbNode.Name,
-				BaseURI: dbNode.BaseUri,
-			},
+	node, parseErrs := nodes.ParseNode(
+		dbNode.Uuid,
+		dbNode.BaseUrl,
+		dbNode.Name,
+		nodes.TLSClientConfig{
+			ClientKey:  dbNode.TlsClientKey,
+			ClientCert: dbNode.TlsClientCert,
+			ServerCert: dbNode.TlsServerCert,
 		},
+	)
+	if parseErrs != nil {
+		return parseErrs
+	}
+	return app.tmpl.ExecuteTemplate(w, "nodes/page", singleNodeView{
+		R:        r,
+		New:      false,
+		nodeView: nodeView{node},
 	})
 }
 
@@ -238,14 +261,20 @@ func (app *App) nodesListHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 	nodeViews := make([]nodeView, 0, len(dbNodes))
 	for _, dbNode := range dbNodes {
-		node := nodeView{
-			Node: nodes.Node{
-				UUID:    dbNode.Uuid,
-				Name:    dbNode.Name,
-				BaseURI: dbNode.BaseUri,
+		node, parseErrs := nodes.ParseNode(
+			dbNode.Uuid,
+			dbNode.BaseUrl,
+			dbNode.Name,
+			nodes.TLSClientConfig{
+				ClientKey:  dbNode.TlsClientKey,
+				ClientCert: dbNode.TlsClientCert,
+				ServerCert: dbNode.TlsServerCert,
 			},
+		)
+		if parseErrs != nil {
+			return parseErrs
 		}
-		nodeViews = append(nodeViews, node)
+		nodeViews = append(nodeViews, nodeView{node})
 	}
 	return app.tmpl.ExecuteTemplate(w, "nodes/list", nodesListView{
 		R:     r,

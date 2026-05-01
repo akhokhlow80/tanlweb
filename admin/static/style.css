@@ -44,6 +44,10 @@ summary {
   margin-top: 10pt;
 }
 
+textarea {
+  width: 100%;
+}
+
 /* Navigation */
 
 #navigation {
@@ -72,6 +76,7 @@ form > * {
 form .error {
   font-size: 10pt;
   color: #eb3434;
+  margin-left: 5pt;
 }
 
 form > label {

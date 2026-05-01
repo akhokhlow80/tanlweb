@@ -21,22 +21,17 @@ type PeerFromNode struct {
 
 type Client struct {
 	sync.RWMutex
-	// TODO: add TLS support (with client auth)
 	Node Node
 }
 
-// baseURI is full URI (including schema, host, etc)
 func NewClient(node Node) *Client {
-	return &Client{
-		Node: node,
-	}
+	return &Client{Node: node}
 }
 
-func (client *Client) Update(node Node) {
+func (client *Client) Update(newNode Node) {
 	defer client.Unlock()
 	client.Lock()
-
-	client.Node = node
+	client.Node = newNode
 }
 
 // I prefer parsing to validation, but too lazy to implement it here
@@ -52,13 +47,17 @@ func (client *Client) getPeersByOwner(ctx context.Context, owner string) ([]Peer
 
 	query := url.Values{}
 	query.Add("owner", owner)
-	uri := client.Node.BaseURI + "/api/v1/peers?" + query.Encode()
+	uri := client.Node.BaseURL.String() + "/api/v1/peers?" + query.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
 	if err != nil {
 		return nil, err
 	}
-	httpClient := &http.Client{}
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: client.Node.parsedTLSConf,
+		},
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -105,12 +104,16 @@ func (client *Client) CreatePeer(ctx context.Context, Owner string) (peers.WGQui
 		return peers.WGQuickConf{}, peers.Peer{}, err
 	}
 
-	uri := client.Node.BaseURI + "/api/v1/peers"
+	uri := client.Node.BaseURL.String() + "/api/v1/peers"
 	req, err := http.NewRequestWithContext(ctx, "POST", uri, bytes.NewBuffer(reqBytes))
 	if err != nil {
 		return peers.WGQuickConf{}, peers.Peer{}, err
 	}
-	httpClient := &http.Client{}
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: client.Node.parsedTLSConf,
+		},
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return peers.WGQuickConf{}, peers.Peer{}, err
@@ -144,12 +147,16 @@ func (client *Client) GetPeer(ctx context.Context, pubkey string) (*PeerFromNode
 	defer client.RUnlock()
 	client.RLock()
 
-	uri := fmt.Sprintf("%s/api/v1/peers/%s", client.Node.BaseURI, url.PathEscape(pubkey))
+	uri := fmt.Sprintf("%s/api/v1/peers/%s", client.Node.BaseURL.String(), url.PathEscape(pubkey))
 	req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
 	if err != nil {
 		return nil, err
 	}
-	httpClient := &http.Client{}
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: client.Node.parsedTLSConf,
+		},
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err

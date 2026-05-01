@@ -34,7 +34,7 @@
       <summary>Scopes (grant only to admin users)</summary>
       <ul>
         <li>
-          nodes
+          nodes (beware that this scope allows user to see and update node mTLS certs and keys!)
           <div>
             <input type="checkbox" name="scope-nodes-read"
               {{if .Scopes.Nodes.HasR}}

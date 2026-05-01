@@ -1,12 +1,22 @@
 <span id="invalid-name" class="error" hx-swap-oob="true"> 
   {{if .NameNotUnique}}
     Name is not unique
-  {{else if .NameEmpty}}
+  {{else if .EmptyName}}
     Required
   {{end}}
 </span>
-<span id="invalid-base-uri" class="error" hx-swap-oob="true">
-  {{if .BaseURIEmpty}}
-    Required
+<span id="invalid-base-url" class="error" hx-swap-oob="true">
+  {{if .InvalidBaseURL}}
+    Invalid base URL
+  {{end}}
+</span>
+<span id="invalid-tls-client-keypair" class="error" hx-swap-oob="true">
+  {{if .InvalidClientKeypair}}
+    Invalid client keypair
+  {{end}}
+</span>
+<span id="invalid-tls-server-cert" class="error" hx-swap-oob="true">
+  {{if .InvalidServerCert}}
+    Invalid server cert
   {{end}}
 </span>

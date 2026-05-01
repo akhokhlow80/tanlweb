@@ -15,29 +15,48 @@ const addNode = `-- name: AddNode :one
 INSERT INTO nodes (
     uuid,
     name,
-    base_uri
+    base_url,
+    tls_client_key,
+    tls_client_cert,
+    tls_server_cert
 ) VALUES (
     ?1,
     ?2,
-    ?3
-) RETURNING id, uuid, name, base_uri
+    ?3,
+    ?4,
+    ?5,
+    ?6
+) RETURNING id, uuid, name, base_url, tls_client_key, tls_client_cert, tls_server_cert
 `
 
 type AddNodeParams struct {
-	Uuid    string
-	Name    string
-	BaseUri string
+	Uuid          string
+	Name          string
+	BaseUrl       string
+	TlsClientKey  string
+	TlsClientCert string
+	TlsServerCert string
 }
 
 // - ======= Nodes =======
 func (q *Queries) AddNode(ctx context.Context, arg AddNodeParams) (Node, error) {
-	row := q.db.QueryRowContext(ctx, addNode, arg.Uuid, arg.Name, arg.BaseUri)
+	row := q.db.QueryRowContext(ctx, addNode,
+		arg.Uuid,
+		arg.Name,
+		arg.BaseUrl,
+		arg.TlsClientKey,
+		arg.TlsClientCert,
+		arg.TlsServerCert,
+	)
 	var i Node
 	err := row.Scan(
 		&i.ID,
 		&i.Uuid,
 		&i.Name,
-		&i.BaseUri,
+		&i.BaseUrl,
+		&i.TlsClientKey,
+		&i.TlsClientCert,
+		&i.TlsServerCert,
 	)
 	return i, err
 }
@@ -184,7 +203,7 @@ func (q *Queries) CreatePeerRequest(ctx context.Context, arg CreatePeerRequestPa
 }
 
 const getNodeByUUID = `-- name: GetNodeByUUID :one
-SELECT id, uuid, name, base_uri FROM nodes
+SELECT id, uuid, name, base_url, tls_client_key, tls_client_cert, tls_server_cert FROM nodes
 WHERE uuid = ?1
 `
 
@@ -195,13 +214,16 @@ func (q *Queries) GetNodeByUUID(ctx context.Context, uuid string) (Node, error) 
 		&i.ID,
 		&i.Uuid,
 		&i.Name,
-		&i.BaseUri,
+		&i.BaseUrl,
+		&i.TlsClientKey,
+		&i.TlsClientCert,
+		&i.TlsServerCert,
 	)
 	return i, err
 }
 
 const getNodes = `-- name: GetNodes :many
-SELECT id, uuid, name, base_uri FROM nodes
+SELECT id, uuid, name, base_url, tls_client_key, tls_client_cert, tls_server_cert FROM nodes
 `
 
 func (q *Queries) GetNodes(ctx context.Context) ([]Node, error) {
@@ -217,7 +239,10 @@ func (q *Queries) GetNodes(ctx context.Context) ([]Node, error) {
 			&i.ID,
 			&i.Uuid,
 			&i.Name,
-			&i.BaseUri,
+			&i.BaseUrl,
+			&i.TlsClientKey,
+			&i.TlsClientCert,
+			&i.TlsServerCert,
 		); err != nil {
 			return nil, err
 		}
@@ -233,7 +258,7 @@ func (q *Queries) GetNodes(ctx context.Context) ([]Node, error) {
 }
 
 const getPeerRequestByRandomID = `-- name: GetPeerRequestByRandomID :one
-SELECT peer_requests.id, peer_requests.random_id, peer_requests.interface_name, peer_requests.requested_at, peer_requests.requested_by_user_uuid, peer_requests.node_id, peer_requests.owned_by_user_id, peer_requests.status, owners.id, owners.uuid, owners.description, owners.scopes, owners.fee, owners.paid_until, owners.is_banned, owners.login_token_version, owners.refresh_token_version, nodes.id, nodes.uuid, nodes.name, nodes.base_uri
+SELECT peer_requests.id, peer_requests.random_id, peer_requests.interface_name, peer_requests.requested_at, peer_requests.requested_by_user_uuid, peer_requests.node_id, peer_requests.owned_by_user_id, peer_requests.status, owners.id, owners.uuid, owners.description, owners.scopes, owners.fee, owners.paid_until, owners.is_banned, owners.login_token_version, owners.refresh_token_version, nodes.id, nodes.uuid, nodes.name, nodes.base_url, nodes.tls_client_key, nodes.tls_client_cert, nodes.tls_server_cert
 FROM peer_requests
     JOIN nodes on nodes.id = peer_requests.node_id
     JOIN users AS owners on owners.id = peer_requests.owned_by_user_id
@@ -271,13 +296,16 @@ func (q *Queries) GetPeerRequestByRandomID(ctx context.Context, randomID string)
 		&i.Node.ID,
 		&i.Node.Uuid,
 		&i.Node.Name,
-		&i.Node.BaseUri,
+		&i.Node.BaseUrl,
+		&i.Node.TlsClientKey,
+		&i.Node.TlsClientCert,
+		&i.Node.TlsServerCert,
 	)
 	return i, err
 }
 
 const getPeerRequests = `-- name: GetPeerRequests :many
-SELECT peer_requests.id, peer_requests.random_id, peer_requests.interface_name, peer_requests.requested_at, peer_requests.requested_by_user_uuid, peer_requests.node_id, peer_requests.owned_by_user_id, peer_requests.status, owners.id, owners.uuid, owners.description, owners.scopes, owners.fee, owners.paid_until, owners.is_banned, owners.login_token_version, owners.refresh_token_version, nodes.id, nodes.uuid, nodes.name, nodes.base_uri
+SELECT peer_requests.id, peer_requests.random_id, peer_requests.interface_name, peer_requests.requested_at, peer_requests.requested_by_user_uuid, peer_requests.node_id, peer_requests.owned_by_user_id, peer_requests.status, owners.id, owners.uuid, owners.description, owners.scopes, owners.fee, owners.paid_until, owners.is_banned, owners.login_token_version, owners.refresh_token_version, nodes.id, nodes.uuid, nodes.name, nodes.base_url, nodes.tls_client_key, nodes.tls_client_cert, nodes.tls_server_cert
 FROM peer_requests
     JOIN nodes on nodes.id = peer_requests.node_id
     JOIN users AS owners on owners.id = peer_requests.owned_by_user_id
@@ -320,7 +348,10 @@ func (q *Queries) GetPeerRequests(ctx context.Context) ([]GetPeerRequestsRow, er
 			&i.Node.ID,
 			&i.Node.Uuid,
 			&i.Node.Name,
-			&i.Node.BaseUri,
+			&i.Node.BaseUrl,
+			&i.Node.TlsClientKey,
+			&i.Node.TlsClientCert,
+			&i.Node.TlsServerCert,
 		); err != nil {
 			return nil, err
 		}
@@ -503,25 +534,41 @@ func (q *Queries) RemoveNode(ctx context.Context, id int64) (int64, error) {
 const updateNode = `-- name: UpdateNode :one
 UPDATE nodes SET
     name = ?1,
-    base_uri = ?2
-WHERE uuid = ?3
-RETURNING id, uuid, name, base_uri
+    base_url = ?2,
+    tls_client_key = ?3,
+    tls_client_cert = ?4,
+    tls_server_cert = ?5
+WHERE uuid = ?6
+RETURNING id, uuid, name, base_url, tls_client_key, tls_client_cert, tls_server_cert
 `
 
 type UpdateNodeParams struct {
-	Name    string
-	BaseUri string
-	Uuid    string
+	Name          string
+	BaseUrl       string
+	TlsClientKey  string
+	TlsClientCert string
+	TlsServerCert string
+	Uuid          string
 }
 
 func (q *Queries) UpdateNode(ctx context.Context, arg UpdateNodeParams) (Node, error) {
-	row := q.db.QueryRowContext(ctx, updateNode, arg.Name, arg.BaseUri, arg.Uuid)
+	row := q.db.QueryRowContext(ctx, updateNode,
+		arg.Name,
+		arg.BaseUrl,
+		arg.TlsClientKey,
+		arg.TlsClientCert,
+		arg.TlsServerCert,
+		arg.Uuid,
+	)
 	var i Node
 	err := row.Scan(
 		&i.ID,
 		&i.Uuid,
 		&i.Name,
-		&i.BaseUri,
+		&i.BaseUrl,
+		&i.TlsClientKey,
+		&i.TlsClientCert,
+		&i.TlsServerCert,
 	)
 	return i, err
 }

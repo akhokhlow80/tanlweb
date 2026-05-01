@@ -93,7 +93,7 @@ func (app *App) newUserPage(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	return app.tmpl.ExecuteTemplate(w, "users/page", nil)
+	return app.tmpl.ExecuteTemplate(w, "users/page", userViewWithHttpReq{R: r})
 }
 
 func (app *App) putUser(w http.ResponseWriter, r *http.Request) error {

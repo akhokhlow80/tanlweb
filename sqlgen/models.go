@@ -9,10 +9,13 @@ import (
 )
 
 type Node struct {
-	ID      int64
-	Uuid    string
-	Name    string
-	BaseUri string
+	ID            int64
+	Uuid          string
+	Name          string
+	BaseUrl       string
+	TlsClientKey  string
+	TlsClientCert string
+	TlsServerCert string
 }
 
 type PeerRequest struct {

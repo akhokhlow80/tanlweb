@@ -1,9 +1,12 @@
 -- +goose Up
 CREATE TABLE nodes (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid     TEXT NOT NULL UNIQUE,
-    name     TEXT NOT NULL UNIQUE,
-    base_uri TEXT NOT NULL
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid            TEXT NOT NULL UNIQUE,
+    name            TEXT NOT NULL UNIQUE,
+    base_url        TEXT NOT NULL,
+    tls_client_key  TEXT NOT NULL,
+    tls_client_cert TEXT NOT NULL,
+    tls_server_cert TEXT NOT NULL
 );
 CREATE TABLE users (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,

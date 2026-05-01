@@ -8,8 +8,7 @@
     {{template "navigation" (NavParams .R "nodes")}}
     <main>
       {{template "nodes/view" .}}
-      {{if .Node.UUID}}
-      {{else}}
+      {{if .New}}
         <div id="peers-list"></div>
       {{end}}
     </main>

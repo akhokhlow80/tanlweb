@@ -4,17 +4,26 @@
 INSERT INTO nodes (
     uuid,
     name,
-    base_uri
+    base_url,
+    tls_client_key,
+    tls_client_cert,
+    tls_server_cert
 ) VALUES (
     @uuid,
     @name,
-    @base_uri
+    @base_url,
+    @tls_client_key,
+    @tls_client_cert,
+    @tls_server_cert
 ) RETURNING *;
 
 -- name: UpdateNode :one
 UPDATE nodes SET
     name = @name,
-    base_uri = @base_uri
+    base_url = @base_url,
+    tls_client_key = @tls_client_key,
+    tls_client_cert = @tls_client_cert,
+    tls_server_cert = @tls_server_cert
 WHERE uuid = @uuid
 RETURNING *;
 

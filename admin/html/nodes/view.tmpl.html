@@ -1,7 +1,7 @@
 <div id="node-view" hx-swap-oob="true">
   {{$readonly := not (AuthUser .R).Scopes.Nodes.HasW}}
 
-  {{if .Node.UUID}}
+  {{if not .New}}
     <h2>View &amp; edit node</h2>
   {{else}}
     <h2>Add new node</h2>
@@ -10,8 +10,8 @@
   <form
     id="node-config-form"
     hx-swap="none"
-    {{if .Node.UUID}}
-      hx-put='{{EncryptURI "nodes/%s" .Node.UUID}}'
+    {{if not .New}}
+      hx-put='{{EncryptURI "nodes/%s" .Node.UUID.String}}'
     {{else}}
       hx-post='{{EncryptURI "nodes"}}'
     {{end}}
@@ -25,18 +25,57 @@
       {{end}}
     />
 
-    <label for="base-uri" class="required">Base URI</label>
-    <span id="invalid-base-uri"></span>
-    <input id="base-uri" name="base-uri" type="text" value="{{.Node.BaseURI}}"
+    <label for="base-url" class="required">Base URL (with HTTPS scheme)</label>
+    <span id="invalid-base-url"></span>
+    <input id="base-url" name="base-url" type="text"
+      {{if not .New}}
+        value="{{.Node.BaseURL.String}}"
+      {{end}}
       {{if $readonly}}
         disabled
       {{end}}
     />
 
+    {{if not .New}}
+      <details>
+        <summary>TLS certs</summary>
+    {{end}}
+
+    <label for="tls-client-key" class="required">TLS client key</label>
+    <span id="invalid-tls-client-keypair"></span>
+    <textarea name="tls-client-key" type="text" value="{{.Node.TLSConf.ClientKey}}"
+      rows="52"
+      {{if $readonly}}
+        disabled
+      {{end}}
+    >{{.Node.TLSConf.ClientKey}}</textarea>
+
+    <label for="tls-client-cert" class="required">TLS client cert</label>
+    <span id="invalid-tls-client-keypair"></span>
+    <textarea name="tls-client-cert" type="text" value="{{.Node.TLSConf.ClientCert}}"
+      rows="31"
+      {{if $readonly}}
+        disabled
+      {{end}}
+    >{{.Node.TLSConf.ClientCert}}</textarea>
+
+    <label for="tls-server-cert" class="required">TLS server cert</label>
+    <span id="invalid-tls-server-cert"></span>
+    <textarea name="tls-server-cert" type="text" value="{{.Node.TLSConf.ServerCert}}"
+      rows="31"
+      {{if $readonly}}
+        disabled
+      {{end}}
+    >{{.Node.TLSConf.ServerCert}}</textarea>
+
+    {{if not .New}}
+      </details>
+    {{end}}
+
     <input
       class="submit"
       type="submit"
-      value="{{if .Node.UUID}}Save{{else}}Create{{end}}"
+      value="{{if not .New}}Save{{else}}Create{{end}}"
       {{if $readonly}}
         disabled
       {{end}}

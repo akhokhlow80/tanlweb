@@ -134,13 +134,21 @@ func (app *App) initNodesClient() error {
 
 	app.nodeClients = nodes.NewMultiClient()
 	for _, dbNode := range dbNodes {
-		app.nodeClients.Put(nodes.NewClient(
-			nodes.Node{
-				UUID:    dbNode.Uuid,
-				BaseURI: dbNode.BaseUri,
-				Name:    dbNode.Name,
+		node, parseErrs := nodes.ParseNode(
+			dbNode.Uuid,
+			dbNode.BaseUrl,
+			dbNode.Name,
+			nodes.TLSClientConfig{
+				ClientKey:  dbNode.TlsClientKey,
+				ClientCert: dbNode.TlsClientCert,
+				ServerCert: dbNode.TlsServerCert,
 			},
-		))
+		)
+		if parseErrs != nil {
+			return parseErrs
+		}
+		client := nodes.NewClient(node)
+		app.nodeClients.Put(client)
 	}
 
 	return nil
