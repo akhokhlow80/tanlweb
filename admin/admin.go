@@ -235,7 +235,11 @@ func (app *App) Serve() error {
 }
 
 func (app *App) IssueLoginURL(userUUID string) (string, error) {
-	user, err := app.db.GetUser(context.Background(), userUUID)
+	user, err := func() (sqlgen.User, error) {
+		defer app.db.RUnlock()
+		app.db.RLock()
+		return app.db.GetUser(context.Background(), userUUID)
+	}()
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", fmt.Errorf("User not found")

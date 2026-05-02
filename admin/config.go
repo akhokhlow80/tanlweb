@@ -10,4 +10,5 @@ type Config struct {
 	RequestKeyRotationInterval int
 	PeerConfigsBaseURI         string
 	DebugMode                  bool
+	IPCSocketName              string
 }

@@ -28,6 +28,7 @@ type config struct {
 	AccessTokenLifetime        int    `env:"ACCESS_TOKEN_LIFETIME_SECS,required"`
 	RequestKeyRotationInterval int    `env:"REQ_KEY_ROTATION_INTERVAL_SECS,required"`
 	PeerConfigsBaseURI         string `env:"PEER_CONFS_BASE_URI,required"`
+	IPCSocketName              string `env:"IPC_SOCKET_NAME,required"`
 
 	// Peer configs
 
@@ -85,6 +86,7 @@ func main() {
 		RequestKeyRotationInterval: cfg.RequestKeyRotationInterval,
 		PeerConfigsBaseURI:         cfg.PeerConfigsBaseURI,
 		DebugMode:                  cfg.DebugMode,
+		IPCSocketName:              cfg.IPCSocketName,
 	}, db, peerReqCache)
 	if err != nil {
 		log.Fatalf("Failed to init admin app: %s", err)
@@ -97,6 +99,9 @@ func main() {
 	if len(os.Args) == 1 {
 		go func() {
 			log.Fatal(adminApp.Serve())
+		}()
+		go func() {
+			log.Fatal(adminApp.ServeIPC())
 		}()
 		log.Fatal(peerConfigsApp.Serve())
 	} else if len(os.Args) == 3 && os.Args[1] == "login-token" {
