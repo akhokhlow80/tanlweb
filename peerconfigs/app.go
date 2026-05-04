@@ -3,13 +3,18 @@ package peerconfigs
 import (
 	"akhokhlow80/tanlweb/peers"
 	"akhokhlow80/tanlweb/reqlog"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
 type Config struct {
-	HTTPBind string
+	HTTPBind    string
+	TLSDisable  bool
+	TLSCertPath string
+	TLSKeyPath  string
 }
 
 type App struct {
@@ -22,6 +27,21 @@ func NewApp(cfg Config, peerReqCache *peers.PendingRequestsCache) *App {
 		cfg:          cfg,
 		peerReqCache: peerReqCache,
 	}
+}
+
+func (app *App) makeTLSConfig() (*tls.Config, error) {
+	if app.cfg.TLSDisable {
+		return nil, nil
+	}
+
+	servCert, err := tls.LoadX509KeyPair(app.cfg.TLSCertPath, app.cfg.TLSKeyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tls.Config{
+		Certificates: []tls.Certificate{servCert},
+	}, nil
 }
 
 func (app *App) Serve() error {
@@ -50,6 +70,20 @@ func (app *App) Serve() error {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(config.String()))
 	})
+
+	tlsConf, err := app.makeTLSConfig()
+	if err != nil {
+		return fmt.Errorf("Failed to load TLS keypair: %w", err)
+	}
+	server := http.Server{
+		Addr:           app.cfg.HTTPBind,
+		Handler:        mux,
+		TLSConfig:      tlsConf,
+		MaxHeaderBytes: 1 << 13, /* 8 KiB */
+		ReadTimeout:    5 * time.Second,
+		WriteTimeout:   5 * time.Second,
+	}
+
 	log.Printf("Peer configs service is binding to %s", app.cfg.HTTPBind)
-	return http.ListenAndServe(app.cfg.HTTPBind, mux)
+	return server.ListenAndServeTLS("", "")
 }

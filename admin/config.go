@@ -11,4 +11,7 @@ type Config struct {
 	PeerConfigsBaseURI         string
 	DebugMode                  bool
 	IPCSocketName              string
+	TLSDisable                 bool
+	TLSKeyPath                 string
+	TLSCertPath                string
 }

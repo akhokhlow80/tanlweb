@@ -29,10 +29,16 @@ type config struct {
 	RequestKeyRotationInterval int    `env:"REQ_KEY_ROTATION_INTERVAL_SECS,required"`
 	PeerConfigsBaseURI         string `env:"PEER_CONFS_BASE_URI,required"`
 	IPCSocketName              string `env:"IPC_SOCKET_NAME,required"`
+	AdminTLSDisable            bool   `env:"ADMIN_TLS_DISABLE"`
+	AdminTLSCertPath           string `env:"ADMIN_TLS_CERT_PATH,required"`
+	AdminTLSKeyPath            string `env:"ADMIN_TLS_KEY_PATH,required"`
 
 	// Peer configs
 
-	PeerConfigsHTTPBind string `env:"PEER_CONFS_HTTP_BIND,required"`
+	PeerConfigsHTTPBind    string `env:"PEER_CONFS_HTTP_BIND,required"`
+	PeerConfigsTLSDisable  bool   `env:"PEER_CONFS_TLS_DISABLE"`
+	PeerConfigsTLSCertPath string `env:"PEER_CONFS_TLS_CERT_PATH,required"`
+	PeerConfigsTLSKeyPath  string `env:"PEER_CONFS_TLS_KEY_PATH,required"`
 
 	// Common
 
@@ -87,23 +93,34 @@ func main() {
 		PeerConfigsBaseURI:         cfg.PeerConfigsBaseURI,
 		DebugMode:                  cfg.DebugMode,
 		IPCSocketName:              cfg.IPCSocketName,
+		TLSKeyPath:                 cfg.AdminTLSKeyPath,
+		TLSCertPath:                cfg.AdminTLSCertPath,
+		TLSDisable:                 cfg.AdminTLSDisable,
 	}, db, peerReqCache)
 	if err != nil {
 		log.Fatalf("Failed to init admin app: %s", err)
 	}
 
 	peerConfigsApp := peerconfigs.NewApp(peerconfigs.Config{
-		HTTPBind: cfg.PeerConfigsHTTPBind,
+		HTTPBind:    cfg.PeerConfigsHTTPBind,
+		TLSDisable:  cfg.PeerConfigsTLSDisable,
+		TLSCertPath: cfg.PeerConfigsTLSCertPath,
+		TLSKeyPath:  cfg.PeerConfigsTLSKeyPath,
 	}, peerReqCache)
 
 	if len(os.Args) == 1 {
 		go func() {
-			log.Fatal(adminApp.Serve())
+			err := adminApp.Serve()
+			log.Fatalf("Admin HTTP: %s", err)
 		}()
 		go func() {
-			log.Fatal(adminApp.ServeIPC())
+			err := adminApp.ServeIPC()
+			log.Fatalf("Admin IPC: %s", err)
 		}()
-		log.Fatal(peerConfigsApp.Serve())
+		func() {
+			err := peerConfigsApp.Serve()
+			log.Fatalf("Peerconfs HTTP: %s", err)
+		}()
 	} else if len(os.Args) == 3 && os.Args[1] == "login-token" {
 		loginURL, err := adminApp.IssueLoginURL(os.Args[2])
 		if err != nil {

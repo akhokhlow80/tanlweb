@@ -9,6 +9,7 @@ import (
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"embed"
 	"encoding/base64"
@@ -208,6 +209,21 @@ func NewApp(cfg Config, db *db.DB, peerReqCache *peers.PendingRequestsCache) (*A
 	return app, nil
 }
 
+func (app *App) makeTLSConfig() (*tls.Config, error) {
+	if app.cfg.TLSDisable {
+		return nil, nil
+	}
+
+	servCert, err := tls.LoadX509KeyPair(app.cfg.TLSCertPath, app.cfg.TLSKeyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tls.Config{
+		Certificates: []tls.Certificate{servCert},
+	}, nil
+}
+
 func (app *App) Serve() error {
 	securedMux := http.NewServeMux()
 	// TODO: enable caching for static files
@@ -230,8 +246,19 @@ func (app *App) Serve() error {
 
 	handler := reqencrypt.DecryptPathMiddleware(app.reqCipher, noCacheMux)
 
+	tlsCfg, err := app.makeTLSConfig()
+	if err != nil {
+		return fmt.Errorf("Failed to load TLS keypair: %s", err)
+	}
+
+	server := http.Server{
+		Addr:      app.cfg.HTTPBind,
+		Handler:   handler,
+		TLSConfig: tlsCfg,
+	}
+
 	log.Printf("Admin service is binding to %s", app.cfg.HTTPBind)
-	return http.ListenAndServe(app.cfg.HTTPBind, handler)
+	return server.ListenAndServeTLS("", "")
 }
 
 func (app *App) IssueLoginURL(userUUID string) (string, error) {
