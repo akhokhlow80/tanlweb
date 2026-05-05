@@ -38,7 +38,7 @@ type RequestEncryptionKey struct {
 type User struct {
 	ID                  int64
 	Uuid                string
-	Description         string
+	Name                string
 	Scopes              string
 	Fee                 string
 	PaidUntil           *time.Time

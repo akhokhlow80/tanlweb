@@ -9,16 +9,16 @@
       <thead>
         <tr>
           <td>User</td>
-          <td>Description</td>
+          <td>Name</td>
           <td>Fee</td>
         </tr>
       </thead>
       <tbody>
         {{range .Users}}
           <tr>
-            <td><a href='{{EncryptURI "users/%s" .UUID}}'>{{slice .UUID 24}}</a></td>
-            <td>{{.Description}}</td>
-            <td>{{.Fee}}</td>
+            <td><a href='{{EncryptURI "users/%s" .UUID.String}}'>{{ShortenUUID .UUID.String}}</a></td>
+            <td>{{.Profile.Name}}</td>
+            <td>{{.Profile.Fee}}</td>
           </tr>
         {{end}}
       </tbody>

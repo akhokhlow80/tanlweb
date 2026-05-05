@@ -72,6 +72,9 @@ func (app *App) initTmpl() error {
 			return *getAuthenticatedUser(r.Context())
 		},
 		"NavParams": makeNavigationParams,
+		"FormatDate": func(t time.Time) string {
+			return t.Format("2006-01-02")
+		},
 	}
 	app.tmpl = template.New("").Funcs(templateFuncs)
 	htmlFS, err := fs.Sub(htmlTemplates, "html")
@@ -261,11 +264,11 @@ func (app *App) Serve() error {
 	return server.ListenAndServeTLS("", "")
 }
 
-func (app *App) IssueLoginURL(userUUID string) (string, error) {
+func (app *App) IssueLoginURL(username string) (string, error) {
 	user, err := func() (sqlgen.User, error) {
 		defer app.db.RUnlock()
 		app.db.RLock()
-		return app.db.GetUser(context.Background(), userUUID)
+		return app.db.GetUserByName(context.Background(), username)
 	}()
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -283,8 +286,20 @@ func (app *App) IssueLoginURL(userUUID string) (string, error) {
 	return loginURL, nil
 }
 
-func (app *App) RevokeRefreshTokens(userUUID string) error {
-	err := app.auth.RevokeRefreshTokens(context.Background(), userUUID)
+func (app *App) RevokeRefreshTokens(username string) error {
+	user, err := func() (sqlgen.User, error) {
+		defer app.db.RUnlock()
+		app.db.RLock()
+		return app.db.GetUserByName(context.Background(), username)
+	}()
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("User not found")
+		} else {
+			return err
+		}
+	}
+	err = app.auth.RevokeRefreshTokens(context.Background(), user.Uuid)
 	if err != nil {
 		if errors.Is(err, auth.ErrSubjectNotFound) {
 			return fmt.Errorf("User not found")
@@ -292,6 +307,6 @@ func (app *App) RevokeRefreshTokens(userUUID string) error {
 			return err
 		}
 	}
-	log.Printf("Revoked refresh tokens for user %s", userUUID)
+	log.Printf("Revoked refresh tokens for user %s", username)
 	return nil
 }

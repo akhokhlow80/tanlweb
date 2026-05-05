@@ -11,8 +11,7 @@ CREATE TABLE nodes (
 CREATE TABLE users (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
     uuid                  TEXT NOT NULL UNIQUE,
-    -- For admins.
-    description           TEXT NOT NULL,
+    name                  TEXT NOT NULL UNIQUE,
     -- Comma separated.
     -- Scopes: nodes, users, peers
     scopes                TEXT NOT NULL,

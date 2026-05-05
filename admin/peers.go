@@ -147,7 +147,7 @@ func (app *App) addPeer(w http.ResponseWriter, r *http.Request) error {
 	err = func(ctx context.Context) error {
 		defer app.db.Unlock()
 		app.db.Lock()
-		user, err := app.db.GetUser(ctx, req.OwnerUUID)
+		user, err := app.db.GetUserByUUID(ctx, req.OwnerUUID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return errNotFound

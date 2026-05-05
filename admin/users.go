@@ -2,6 +2,8 @@ package admin
 
 import (
 	"akhokhlow80/tanlweb/admin/auth"
+	"akhokhlow80/tanlweb/admin/users"
+	"akhokhlow80/tanlweb/db"
 	"akhokhlow80/tanlweb/nodes"
 	"akhokhlow80/tanlweb/peers"
 	"akhokhlow80/tanlweb/sqlgen"
@@ -18,24 +20,62 @@ import (
 	"github.com/google/uuid"
 )
 
+func parseUserFromDB(dbUser *sqlgen.User) (users.User, error) {
+	var paidUntil time.Time
+	if dbUser.PaidUntil != nil {
+		paidUntil = *dbUser.PaidUntil
+	}
+	scopes, err := auth.ParseScopes(dbUser.Scopes)
+	if err != nil {
+		return users.User{}, fmt.Errorf("User %s has invalid scopes `%s`: %s", dbUser.Name, dbUser.Scopes, err)
+	}
+	userUUID, err := uuid.Parse(dbUser.Uuid)
+	if err != nil {
+		return users.User{}, fmt.Errorf("User %s has invalid UUID `%s`", dbUser.Name, dbUser.Uuid)
+	}
+	profile, parseErrs := users.ParseUserProfile(
+		dbUser.Name,
+		dbUser.Fee,
+		scopes,
+	)
+	if parseErrs != nil {
+		return users.User{}, fmt.Errorf("User %s has invalid profile: %s", dbUser.Name, parseErrs)
+	}
+	return users.User{
+		UUID:      userUUID,
+		Profile:   profile,
+		PaidUntil: paidUntil,
+		IsBanned:  dbUser.IsBanned,
+	}, nil
+}
+
 func (app *App) addRootUserIfNotExists(ctx context.Context) error {
 	defer app.db.RUnlock()
 	app.db.RLock()
 
-	users, err := app.db.GetUsers(ctx)
+	dbUsers, err := app.db.GetUsers(ctx)
 	if err != nil {
 		return err
 	}
-	if len(users) == 0 {
-		user, err := app.db.AddUser(ctx, sqlgen.AddUserParams{
-			Uuid:        uuid.New().String(),
-			Description: "root",
-			Scopes:      auth.FullScope.String(),
+	if len(dbUsers) == 0 {
+		root, parseErrs := users.NewUser(
+			"root",
+			"",
+			auth.FullScope,
+		)
+		if parseErrs != nil {
+			return parseErrs
+		}
+		_, err := app.db.AddUser(ctx, sqlgen.AddUserParams{
+			Uuid:   root.UUID.String(),
+			Name:   root.Profile.Name,
+			Scopes: root.Profile.Scopes.String(),
+			Fee:    root.Profile.Fee,
 		})
 		if err != nil {
 			return fmt.Errorf("Error adding root user: %w", err)
 		}
-		log.Printf("Created root user %s with full scope", user.Uuid)
+		log.Println("Created user root with full scope")
 	}
 	return nil
 }
@@ -44,9 +84,9 @@ func (app *App) registerUsersHandlers(m *http.ServeMux) {
 	m.HandleFunc("GET /users/new",
 		web.FailableHandler(app.standardErrorHandler, app.newUserPageHandler))
 	m.HandleFunc("POST /users",
-		web.FailableHandler(app.htmxErrorHandler, app.putUserHandler))
+		web.FailableHandler(app.htmxErrorHandler, app.addUserHandler))
 	m.HandleFunc("PUT /users/{uuid}",
-		web.FailableHandler(app.htmxErrorHandler, app.putUserHandler))
+		web.FailableHandler(app.htmxErrorHandler, app.updateUserHandler))
 	m.HandleFunc("PUT /users/{uuid}/paid-until",
 		web.FailableHandler(app.htmxErrorHandler, app.putUserPaidUntilHandler))
 	m.HandleFunc("PUT /users/{uuid}/ban",
@@ -57,15 +97,6 @@ func (app *App) registerUsersHandlers(m *http.ServeMux) {
 		web.FailableHandler(app.standardErrorHandler, app.usersListHandler))
 }
 
-type userView struct {
-	UUID        string
-	Description string
-	Fee         string
-	Scopes      auth.Scopes
-	PaidUntil   string
-	IsBanned    bool
-}
-
 type userOwnedPeers struct {
 	Peers               []nodes.PeerFromNode
 	PeersRetrievalError error
@@ -73,28 +104,11 @@ type userOwnedPeers struct {
 }
 
 type singleUserView struct {
-	userView
-	Owned *userOwnedPeers
-	R     *http.Request
-}
-
-func userViewFromDB(dbUser *sqlgen.User) userView {
-	var paidUntil string
-	if dbUser.PaidUntil != nil {
-		paidUntil = dbUser.PaidUntil.Format("2006-01-02")
-	}
-	scopes, err := auth.ParseScopes(dbUser.Scopes)
-	if err != nil {
-		log.Printf("Failed to parse scopes `%s` from DB of user `%s`: %s", dbUser.Scopes, dbUser.Uuid, err)
-	}
-	return userView{
-		UUID:        dbUser.Uuid,
-		Description: dbUser.Description,
-		Fee:         dbUser.Fee,
-		Scopes:      scopes,
-		PaidUntil:   paidUntil,
-		IsBanned:    dbUser.IsBanned,
-	}
+	users.User
+	New           bool
+	Owned         *userOwnedPeers
+	R             *http.Request
+	ConstTimeZero time.Time
 }
 
 func (app *App) newUserPageHandler(w http.ResponseWriter, r *http.Request) error {
@@ -102,26 +116,10 @@ func (app *App) newUserPageHandler(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 
-	return app.tmpl.ExecuteTemplate(w, "users/page", singleUserView{R: r})
+	return app.tmpl.ExecuteTemplate(w, "users/page", singleUserView{New: true, R: r})
 }
 
-func (app *App) putUserHandler(w http.ResponseWriter, r *http.Request) error {
-	if err := authorize(r.Context(), &auth.Scopes{Users: auth.W}); err != nil {
-		return err
-	}
-
-	if err := r.ParseForm(); err != nil {
-		return errParseForm
-	}
-
-	addNew := r.Method == "POST"
-
-	var userUUID string
-	if !addNew {
-		userUUID = r.PathValue("uuid")
-	}
-	description := web.FormScalar(r.Form, "description")
-	fee := web.FormTrimmedScalar(r.Form, "fee")
+func readFormScopes(r *http.Request) auth.Scopes {
 	var scopes auth.Scopes
 	if web.FormTrimmedScalar(r.Form, "scope-users-read") == "on" {
 		scopes.Users |= auth.R
@@ -141,70 +139,128 @@ func (app *App) putUserHandler(w http.ResponseWriter, r *http.Request) error {
 	if web.FormTrimmedScalar(r.Form, "scope-peers-write") == "on" {
 		scopes.Peers |= auth.W
 	}
+	return scopes
+}
 
-	var (
-		dbUser     sqlgen.User
-		ownedPeers *userOwnedPeers
-		err        error
-	)
-	if addNew {
-		dbUser, err = func() (sqlgen.User, error) {
-			defer app.db.Unlock()
-			app.db.Lock()
-			return app.db.AddUser(r.Context(), sqlgen.AddUserParams{
-				Uuid:        uuid.NewString(),
-				Description: description,
-				Scopes:      scopes.String(),
-				Fee:         fee,
+type userErrorsView struct {
+	users.UserProfileParseErrors
+	NameNotUnique bool
+}
+
+func (app *App) addUserHandler(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Users: auth.W}); err != nil {
+		return err
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return errParseForm
+	}
+
+	name := web.FormScalar(r.Form, "name")
+	fee := web.FormTrimmedScalar(r.Form, "fee")
+	scopes := readFormScopes(r)
+	user, parseErrs := users.NewUser(name, fee, scopes)
+	if parseErrs != nil {
+		return app.tmpl.ExecuteTemplate(w, "users/invalid", userErrorsView{
+			UserProfileParseErrors: *parseErrs,
+		})
+	}
+
+	dbUser, err := func() (sqlgen.User, error) {
+		defer app.db.Unlock()
+		app.db.Lock()
+		return app.db.AddUser(r.Context(), sqlgen.AddUserParams{
+			Uuid:   user.UUID.String(),
+			Name:   user.Profile.Name,
+			Scopes: user.Profile.Scopes.String(),
+			Fee:    user.Profile.Fee,
+		})
+	}()
+	if err != nil {
+		if db.IsConstraintErr(err) {
+			return app.tmpl.ExecuteTemplate(w, "users/invalid", userErrorsView{
+				NameNotUnique: true,
 			})
-		}()
-		if err != nil {
-			return err
-		}
-
-		if err := app.renderNotification(w, notification{Ok: true, Message: "Created"}); err != nil {
-			return err
-		}
-
-		w.Header().Add("HX-Replace-Url", app.encryptURI("users/"+url.PathEscape(dbUser.Uuid)))
-
-		ownedPeers = &userOwnedPeers{
-			Peers:               nil,
-			PeersRetrievalError: nil,
-			PendingPeerRequests: nil,
-		}
-	} else {
-		dbUser, err = func() (sqlgen.User, error) {
-			defer app.db.Unlock()
-			app.db.Lock()
-			return app.db.UpdateUser(r.Context(), sqlgen.UpdateUserParams{
-				Description: description,
-				Scopes:      scopes.String(),
-				Fee:         fee,
-				Uuid:        userUUID,
-			})
-		}()
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return errNotFound
-			} else {
-				return err
-			}
-		}
-
-		if err := app.renderNotification(w, notification{Ok: true, Message: "Updated"}); err != nil {
+		} else {
 			return err
 		}
 	}
+
+	if err := app.renderNotification(w, notification{Ok: true, Message: "Created"}); err != nil {
+		return err
+	}
+
+	w.Header().Add("HX-Replace-Url", app.encryptURI("users/"+url.PathEscape(dbUser.Uuid)))
 
 	return app.tmpl.ExecuteTemplate(
 		w,
 		"users/view",
 		singleUserView{
-			R:        r,
-			Owned:    ownedPeers,
-			userView: userViewFromDB(&dbUser),
+			User:  user,
+			R:     r,
+			Owned: &userOwnedPeers{},
+		},
+	)
+}
+
+func (app *App) updateUserHandler(w http.ResponseWriter, r *http.Request) error {
+	if err := authorize(r.Context(), &auth.Scopes{Users: auth.W}); err != nil {
+		return err
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return errParseForm
+	}
+
+	userUUID := r.PathValue("uuid")
+
+	name := web.FormScalar(r.Form, "name")
+	fee := web.FormTrimmedScalar(r.Form, "fee")
+	scopes := readFormScopes(r)
+	profile, parseErrs := users.ParseUserProfile(name, fee, scopes)
+	if parseErrs != nil {
+		return app.tmpl.ExecuteTemplate(w, "users/invalid", userErrorsView{
+			UserProfileParseErrors: *parseErrs,
 		})
+	}
+	dbUser, err := func() (sqlgen.User, error) {
+		defer app.db.Unlock()
+		app.db.Lock()
+		return app.db.UpdateUser(r.Context(), sqlgen.UpdateUserParams{
+			Name:   profile.Name,
+			Scopes: profile.Scopes.String(),
+			Fee:    profile.Fee,
+			Uuid:   userUUID,
+		})
+	}()
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errNotFound
+		} else if db.IsConstraintErr(err) {
+			return app.tmpl.ExecuteTemplate(w, "users/invalid", userErrorsView{
+				NameNotUnique: true,
+			})
+		} else {
+			return err
+		}
+	}
+
+	if err := app.renderNotification(w, notification{Ok: true, Message: "Updated"}); err != nil {
+		return err
+	}
+
+	user, err := parseUserFromDB(&dbUser)
+	if err != nil {
+		return err
+	}
+	return app.tmpl.ExecuteTemplate(
+		w,
+		"users/view",
+		singleUserView{
+			User: user,
+			R:    r,
+		},
+	)
 }
 
 func (app *App) putUserPaidUntilHandler(w http.ResponseWriter, r *http.Request) error {
@@ -247,13 +303,16 @@ func (app *App) putUserPaidUntilHandler(w http.ResponseWriter, r *http.Request) 
 		return err
 	}
 
+	user, err := parseUserFromDB(&dbUser)
+	if err != nil {
+		return err
+	}
 	return app.tmpl.ExecuteTemplate(
 		w,
 		"users/view",
 		singleUserView{
-			userView: userViewFromDB(&dbUser),
-			Owned:    nil,
-			R:        r,
+			User: user,
+			R:    r,
 		},
 	)
 }
@@ -298,13 +357,16 @@ func (app *App) putUserBanHandler(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 
+	user, err := parseUserFromDB(&dbUser)
+	if err != nil {
+		return err
+	}
 	return app.tmpl.ExecuteTemplate(
 		w,
 		"users/view",
 		singleUserView{
-			R:        r,
-			Owned:    nil,
-			userView: userViewFromDB(&dbUser),
+			R:    r,
+			User: user,
 		},
 	)
 }
@@ -318,7 +380,7 @@ func (app *App) userPageHandler(w http.ResponseWriter, r *http.Request) error {
 	dbUser, dbReqs, err := func() (sqlgen.User, []sqlgen.GetUncompletedPeerRequestsForUserRow, error) {
 		defer app.db.RUnlock()
 		app.db.RLock()
-		user, err := app.db.GetUser(r.Context(), userUuid)
+		user, err := app.db.GetUserByUUID(r.Context(), userUuid)
 		if err != nil {
 			return sqlgen.User{}, nil, err
 		}
@@ -345,12 +407,15 @@ func (app *App) userPageHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	peers, errsByNode := app.nodeClients.GetUserPeers(r.Context(), userUuid)
-
+	user, err := parseUserFromDB(&dbUser)
+	if err != nil {
+		return err
+	}
 	return app.tmpl.ExecuteTemplate(
 		w,
 		"users/page",
 		singleUserView{
-			userView: userViewFromDB(&dbUser),
+			User: user,
 			Owned: &userOwnedPeers{
 				Peers:               peers,
 				PeersRetrievalError: errsByNode.Error(),
@@ -363,7 +428,7 @@ func (app *App) userPageHandler(w http.ResponseWriter, r *http.Request) error {
 
 type usersListView struct {
 	R     *http.Request
-	Users []userView
+	Users []users.User
 }
 
 func (app *App) usersListHandler(w http.ResponseWriter, r *http.Request) error {
@@ -379,9 +444,12 @@ func (app *App) usersListHandler(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	users := make([]userView, 0, len(dbUsers))
+	users := make([]users.User, 0, len(dbUsers))
 	for _, dbUser := range dbUsers {
-		user := userViewFromDB(&dbUser)
+		user, err := parseUserFromDB(&dbUser)
+		if err != nil {
+			return err
+		}
 		users = append(users, user)
 	}
 	return app.tmpl.ExecuteTemplate(

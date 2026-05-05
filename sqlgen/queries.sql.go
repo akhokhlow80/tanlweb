@@ -65,7 +65,7 @@ const addUser = `-- name: AddUser :one
 
 INSERT INTO users (
     uuid,
-    description,
+    name,
     scopes,
     fee,
     is_banned
@@ -75,21 +75,21 @@ INSERT INTO users (
     ?3,
     ?4,
     FALSE
-) RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
+) RETURNING id, uuid, name, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
 `
 
 type AddUserParams struct {
-	Uuid        string
-	Description string
-	Scopes      string
-	Fee         string
+	Uuid   string
+	Name   string
+	Scopes string
+	Fee    string
 }
 
 // - ======= Users =======
 func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, addUser,
 		arg.Uuid,
-		arg.Description,
+		arg.Name,
 		arg.Scopes,
 		arg.Fee,
 	)
@@ -97,7 +97,7 @@ func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) (User, error) 
 	err := row.Scan(
 		&i.ID,
 		&i.Uuid,
-		&i.Description,
+		&i.Name,
 		&i.Scopes,
 		&i.Fee,
 		&i.PaidUntil,
@@ -112,7 +112,7 @@ const banUser = `-- name: BanUser :one
 UPDATE users SET
     is_banned = ?1
 WHERE uuid = ?2
-RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
+RETURNING id, uuid, name, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
 `
 
 type BanUserParams struct {
@@ -126,7 +126,7 @@ func (q *Queries) BanUser(ctx context.Context, arg BanUserParams) (User, error) 
 	err := row.Scan(
 		&i.ID,
 		&i.Uuid,
-		&i.Description,
+		&i.Name,
 		&i.Scopes,
 		&i.Fee,
 		&i.PaidUntil,
@@ -258,7 +258,7 @@ func (q *Queries) GetNodes(ctx context.Context) ([]Node, error) {
 }
 
 const getPeerRequestByRandomID = `-- name: GetPeerRequestByRandomID :one
-SELECT peer_requests.id, peer_requests.random_id, peer_requests.interface_name, peer_requests.requested_at, peer_requests.requested_by_user_uuid, peer_requests.node_id, peer_requests.owned_by_user_id, peer_requests.status, owners.id, owners.uuid, owners.description, owners.scopes, owners.fee, owners.paid_until, owners.is_banned, owners.login_token_version, owners.refresh_token_version, nodes.id, nodes.uuid, nodes.name, nodes.base_url, nodes.tls_client_key, nodes.tls_client_cert, nodes.tls_server_cert
+SELECT peer_requests.id, peer_requests.random_id, peer_requests.interface_name, peer_requests.requested_at, peer_requests.requested_by_user_uuid, peer_requests.node_id, peer_requests.owned_by_user_id, peer_requests.status, owners.id, owners.uuid, owners.name, owners.scopes, owners.fee, owners.paid_until, owners.is_banned, owners.login_token_version, owners.refresh_token_version, nodes.id, nodes.uuid, nodes.name, nodes.base_url, nodes.tls_client_key, nodes.tls_client_cert, nodes.tls_server_cert
 FROM peer_requests
     JOIN nodes on nodes.id = peer_requests.node_id
     JOIN users AS owners on owners.id = peer_requests.owned_by_user_id
@@ -286,7 +286,7 @@ func (q *Queries) GetPeerRequestByRandomID(ctx context.Context, randomID string)
 		&i.PeerRequest.Status,
 		&i.User.ID,
 		&i.User.Uuid,
-		&i.User.Description,
+		&i.User.Name,
 		&i.User.Scopes,
 		&i.User.Fee,
 		&i.User.PaidUntil,
@@ -305,7 +305,7 @@ func (q *Queries) GetPeerRequestByRandomID(ctx context.Context, randomID string)
 }
 
 const getPeerRequests = `-- name: GetPeerRequests :many
-SELECT peer_requests.id, peer_requests.random_id, peer_requests.interface_name, peer_requests.requested_at, peer_requests.requested_by_user_uuid, peer_requests.node_id, peer_requests.owned_by_user_id, peer_requests.status, owners.id, owners.uuid, owners.description, owners.scopes, owners.fee, owners.paid_until, owners.is_banned, owners.login_token_version, owners.refresh_token_version, nodes.id, nodes.uuid, nodes.name, nodes.base_url, nodes.tls_client_key, nodes.tls_client_cert, nodes.tls_server_cert
+SELECT peer_requests.id, peer_requests.random_id, peer_requests.interface_name, peer_requests.requested_at, peer_requests.requested_by_user_uuid, peer_requests.node_id, peer_requests.owned_by_user_id, peer_requests.status, owners.id, owners.uuid, owners.name, owners.scopes, owners.fee, owners.paid_until, owners.is_banned, owners.login_token_version, owners.refresh_token_version, nodes.id, nodes.uuid, nodes.name, nodes.base_url, nodes.tls_client_key, nodes.tls_client_cert, nodes.tls_server_cert
 FROM peer_requests
     JOIN nodes on nodes.id = peer_requests.node_id
     JOIN users AS owners on owners.id = peer_requests.owned_by_user_id
@@ -338,7 +338,7 @@ func (q *Queries) GetPeerRequests(ctx context.Context) ([]GetPeerRequestsRow, er
 			&i.PeerRequest.Status,
 			&i.User.ID,
 			&i.User.Uuid,
-			&i.User.Description,
+			&i.User.Name,
 			&i.User.Scopes,
 			&i.User.Fee,
 			&i.User.PaidUntil,
@@ -380,7 +380,7 @@ func (q *Queries) GetRequestEncryptionKeys(ctx context.Context) (RequestEncrypti
 }
 
 const getUncompletedPeerRequestsForUser = `-- name: GetUncompletedPeerRequestsForUser :many
-SELECT peer_requests.id, peer_requests.random_id, peer_requests.interface_name, peer_requests.requested_at, peer_requests.requested_by_user_uuid, peer_requests.node_id, peer_requests.owned_by_user_id, peer_requests.status, owners.id, owners.uuid, owners.description, owners.scopes, owners.fee, owners.paid_until, owners.is_banned, owners.login_token_version, owners.refresh_token_version, nodes.id, nodes.uuid, nodes.name, nodes.base_url, nodes.tls_client_key, nodes.tls_client_cert, nodes.tls_server_cert
+SELECT peer_requests.id, peer_requests.random_id, peer_requests.interface_name, peer_requests.requested_at, peer_requests.requested_by_user_uuid, peer_requests.node_id, peer_requests.owned_by_user_id, peer_requests.status, owners.id, owners.uuid, owners.name, owners.scopes, owners.fee, owners.paid_until, owners.is_banned, owners.login_token_version, owners.refresh_token_version, nodes.id, nodes.uuid, nodes.name, nodes.base_url, nodes.tls_client_key, nodes.tls_client_cert, nodes.tls_server_cert
 FROM peer_requests
     JOIN nodes on nodes.id = peer_requests.node_id
     JOIN users AS owners on owners.id = peer_requests.owned_by_user_id
@@ -416,7 +416,7 @@ func (q *Queries) GetUncompletedPeerRequestsForUser(ctx context.Context, userUui
 			&i.PeerRequest.Status,
 			&i.User.ID,
 			&i.User.Uuid,
-			&i.User.Description,
+			&i.User.Name,
 			&i.User.Scopes,
 			&i.User.Fee,
 			&i.User.PaidUntil,
@@ -444,35 +444,13 @@ func (q *Queries) GetUncompletedPeerRequestsForUser(ctx context.Context, userUui
 	return items, nil
 }
 
-const getUser = `-- name: GetUser :one
-SELECT id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version FROM users
-WHERE uuid = ?1
-`
-
-func (q *Queries) GetUser(ctx context.Context, uuid string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUser, uuid)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Uuid,
-		&i.Description,
-		&i.Scopes,
-		&i.Fee,
-		&i.PaidUntil,
-		&i.IsBanned,
-		&i.LoginTokenVersion,
-		&i.RefreshTokenVersion,
-	)
-	return i, err
-}
-
 const getUserAndUpdateForLogin = `-- name: GetUserAndUpdateForLogin :one
 UPDATE users SET
     login_token_version = login_token_version +1
 WHERE
     uuid = ?1
     AND login_token_version = ?2
-RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
+RETURNING id, uuid, name, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
 `
 
 type GetUserAndUpdateForLoginParams struct {
@@ -486,7 +464,51 @@ func (q *Queries) GetUserAndUpdateForLogin(ctx context.Context, arg GetUserAndUp
 	err := row.Scan(
 		&i.ID,
 		&i.Uuid,
-		&i.Description,
+		&i.Name,
+		&i.Scopes,
+		&i.Fee,
+		&i.PaidUntil,
+		&i.IsBanned,
+		&i.LoginTokenVersion,
+		&i.RefreshTokenVersion,
+	)
+	return i, err
+}
+
+const getUserByName = `-- name: GetUserByName :one
+SELECT id, uuid, name, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version FROM users
+WHERE name = ?1
+`
+
+func (q *Queries) GetUserByName(ctx context.Context, name string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByName, name)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Name,
+		&i.Scopes,
+		&i.Fee,
+		&i.PaidUntil,
+		&i.IsBanned,
+		&i.LoginTokenVersion,
+		&i.RefreshTokenVersion,
+	)
+	return i, err
+}
+
+const getUserByUUID = `-- name: GetUserByUUID :one
+SELECT id, uuid, name, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version FROM users
+WHERE uuid = ?1
+`
+
+func (q *Queries) GetUserByUUID(ctx context.Context, uuid string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByUUID, uuid)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Name,
 		&i.Scopes,
 		&i.Fee,
 		&i.PaidUntil,
@@ -498,7 +520,7 @@ func (q *Queries) GetUserAndUpdateForLogin(ctx context.Context, arg GetUserAndUp
 }
 
 const getUsers = `-- name: GetUsers :many
-SELECT id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version FROM users
+SELECT id, uuid, name, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version FROM users
 `
 
 func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
@@ -513,7 +535,7 @@ func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.Uuid,
-			&i.Description,
+			&i.Name,
 			&i.Scopes,
 			&i.Fee,
 			&i.PaidUntil,
@@ -539,7 +561,7 @@ UPDATE users SET
     login_token_version = login_token_version + 1
 WHERE
     uuid = ?1
-RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
+RETURNING id, uuid, name, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
 `
 
 func (q *Queries) IncrementUserLoginVersion(ctx context.Context, uuid string) (User, error) {
@@ -548,7 +570,7 @@ func (q *Queries) IncrementUserLoginVersion(ctx context.Context, uuid string) (U
 	err := row.Scan(
 		&i.ID,
 		&i.Uuid,
-		&i.Description,
+		&i.Name,
 		&i.Scopes,
 		&i.Fee,
 		&i.PaidUntil,
@@ -564,7 +586,7 @@ UPDATE users SET
     refresh_token_version = refresh_token_version + 1
 WHERE
     uuid = ?1
-RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
+RETURNING id, uuid, name, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
 `
 
 func (q *Queries) IncrementUserRefreshVersion(ctx context.Context, uuid string) (User, error) {
@@ -573,7 +595,7 @@ func (q *Queries) IncrementUserRefreshVersion(ctx context.Context, uuid string) 
 	err := row.Scan(
 		&i.ID,
 		&i.Uuid,
-		&i.Description,
+		&i.Name,
 		&i.Scopes,
 		&i.Fee,
 		&i.PaidUntil,
@@ -693,23 +715,23 @@ func (q *Queries) UpdateRequestEncryptionKeys(ctx context.Context, arg UpdateReq
 
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET
-    description = ?1,
+    name = ?1,
     scopes = ?2,
     fee = ?3
 WHERE uuid = ?4
-RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
+RETURNING id, uuid, name, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
 `
 
 type UpdateUserParams struct {
-	Description string
-	Scopes      string
-	Fee         string
-	Uuid        string
+	Name   string
+	Scopes string
+	Fee    string
+	Uuid   string
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, updateUser,
-		arg.Description,
+		arg.Name,
 		arg.Scopes,
 		arg.Fee,
 		arg.Uuid,
@@ -718,7 +740,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 	err := row.Scan(
 		&i.ID,
 		&i.Uuid,
-		&i.Description,
+		&i.Name,
 		&i.Scopes,
 		&i.Fee,
 		&i.PaidUntil,
@@ -733,7 +755,7 @@ const updateUserPaidUntil = `-- name: UpdateUserPaidUntil :one
 UPDATE users SET
     paid_until = ?1
 WHERE uuid = ?2
-RETURNING id, uuid, description, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
+RETURNING id, uuid, name, scopes, fee, paid_until, is_banned, login_token_version, refresh_token_version
 `
 
 type UpdateUserPaidUntilParams struct {
@@ -747,7 +769,7 @@ func (q *Queries) UpdateUserPaidUntil(ctx context.Context, arg UpdateUserPaidUnt
 	err := row.Scan(
 		&i.ID,
 		&i.Uuid,
-		&i.Description,
+		&i.Name,
 		&i.Scopes,
 		&i.Fee,
 		&i.PaidUntil,

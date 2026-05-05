@@ -8,8 +8,8 @@
     {{template "navigation" (NavParams .R "users")}}
     <main>
       {{template "users/view" .}}
-      {{if not .UUID}}
-        <div id="peers" hx-swap-oob="true"></div>
+      {{if .New}}
+        <div id="peers-list" hx-swap-oob="true"></div>
       {{end}}
     </main>
   </body>

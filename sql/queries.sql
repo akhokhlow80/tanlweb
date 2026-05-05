@@ -42,13 +42,13 @@ WHERE uuid = @uuid;
 -- name: AddUser :one
 INSERT INTO users (
     uuid,
-    description,
+    name,
     scopes,
     fee,
     is_banned
 ) VALUES (
     @uuid,
-    @description,
+    @name,
     @scopes,
     @fee,
     FALSE
@@ -57,13 +57,17 @@ INSERT INTO users (
 -- name: GetUsers :many
 SELECT * FROM users;
 
--- name: GetUser :one
+-- name: GetUserByUUID :one
 SELECT * FROM users
 WHERE uuid = @uuid;
 
+-- name: GetUserByName :one
+SELECT * FROM users
+WHERE name = @name;
+
 -- name: UpdateUser :one
 UPDATE users SET
-    description = @description,
+    name = @name,
     scopes = @scopes,
     fee = @fee
 WHERE uuid = @uuid

@@ -121,7 +121,7 @@ func main() {
 			err := peerConfigsApp.Serve()
 			log.Fatalf("Peerconfs HTTP: %s", err)
 		}()
-	} else if len(os.Args) == 3 && os.Args[1] == "login-token" {
+	} else if len(os.Args) == 3 && os.Args[1] == "login-url" {
 		loginURL, err := adminApp.IssueLoginURL(os.Args[2])
 		if err != nil {
 			log.Fatal(err)
@@ -134,7 +134,7 @@ func main() {
 	} else {
 		fmt.Fprintf(
 			os.Stderr,
-			"usage: %s [login-token <user UUID> | revoke-refresh-tokens <user UUID>]\n",
+			"usage: %s [login-url <user name> | revoke-refresh-tokens <user name>]\n",
 			os.Args[0],
 		)
 	}

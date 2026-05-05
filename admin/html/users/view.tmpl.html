@@ -1,32 +1,33 @@
 <div id="user-view" hx-swap-oob="true">
   {{$readonly := not (AuthUser .R).Scopes.Users.HasW}}
 
-  {{if .UUID}}
-    <h2>View &amp; edit user</h2>
-  {{else}}
+  {{if .New}}
     <h2>Add new user</h2>
+  {{else}}
+    <h2>View &amp; edit user</h2>
   {{end}}
 
   <form
     id="user-config-form"
     hx-swap="none"
     autocomplete="off"
-    {{if .UUID}}
-      hx-put='{{EncryptURI "users/%s" .UUID}}'
-    {{else}}
+    {{if .New}}
       hx-post='{{EncryptURI "users"}}'
+    {{else}}
+      hx-put='{{EncryptURI "users/%s" .UUID.String}}'
     {{end}}
     hx-disabled-elt="find input[type='submit']"
   >
-    <div class="field">
-      <p class="name">UUID:</p>
-      <p class="value">{{.UUID}}</p>
-    </div>
+    {{if not .New}}
+      <div class="field">
+        <p class="name">UUID:</p>
+        <p class="value">{{.User.UUID}}</p>
+      </div>
+    {{end}}
 
-    {{/*TODO: make the description mandatory*/}}
-  
-    <label for="description" class="required">Description (seen only by admins)</label>
-    <input id="description" name="description" type="text" value="{{.Description}}"
+    <label for="name" class="required">Unique name (at least one alphanum char; seen only by admins)</label>
+    <span id="invalid-name"></span>
+    <input id="name" name="name" type="text" value="{{.Profile.Name}}"
       {{if $readonly}}
         disabled
       {{end}}/>
@@ -38,7 +39,7 @@
           nodes (beware that this scope allows user to see and update node mTLS certs and keys!)
           <div>
             <input type="checkbox" name="scope-nodes-read"
-              {{if .Scopes.Nodes.HasR}}
+              {{if .Profile.Scopes.Nodes.HasR}}
                 checked
               {{end}}
               {{if $readonly}}
@@ -49,7 +50,7 @@
           </div>
           <div>
             <input type="checkbox" name="scope-nodes-write"
-              {{if .Scopes.Nodes.HasW}}
+              {{if .Profile.Scopes.Nodes.HasW}}
                 checked
               {{end}}
               {{if $readonly}}
@@ -63,7 +64,7 @@
           users
           <div>
             <input type="checkbox" name="scope-users-read"
-              {{if .Scopes.Users.HasR}}
+              {{if .Profile.Scopes.Users.HasR}}
                 checked
               {{end}}
               {{if $readonly}}
@@ -74,7 +75,7 @@
           </div>
           <div>
             <input type="checkbox" name="scope-users-write"
-              {{if .Scopes.Users.HasW}}
+              {{if .Profile.Scopes.Users.HasW}}
                 checked
               {{end}}
               {{if $readonly}}
@@ -88,7 +89,7 @@
           peers
           <div>
             <input type="checkbox" name="scope-peers-read"
-              {{if .Scopes.Peers.HasR}}
+              {{if .Profile.Scopes.Peers.HasR}}
                 checked
               {{end}}
               {{if $readonly}}
@@ -99,7 +100,7 @@
           </div>
           <div>
             <input type="checkbox" name="scope-peers-write"
-              {{if .Scopes.Peers.HasW}}
+              {{if .Profile.Scopes.Peers.HasW}}
                 checked
               {{end}}
               {{if $readonly}}
@@ -113,7 +114,7 @@
     </details>
 
     <label for="fee">Fee (leave empty if you don't want to charge the user)</label>
-    <input id="fee" name="fee" type="text" value="{{.Fee}}"
+    <input id="fee" name="fee" type="text" value="{{.Profile.Fee}}"
       {{if $readonly}}
         disabled
       {{end}}
@@ -125,18 +126,18 @@
       {{if $readonly}}
         disabled
       {{end}}
-      value="{{if .UUID}}Save{{else}}Create{{end}}"
+      value="{{if .New}}Create{{else}}Save{{end}}"
     />
   </form>
 
-  {{if .UUID}}
+  {{if not .New}}
     <hr>
 
     <form
       id="user-paid-until-form"
       autocomplete="off"
       hx-swap="none"
-      hx-put='{{EncryptURI "users/%s/paid-until" .UUID}}'
+      hx-put='{{EncryptURI "users/%s/paid-until" .User.UUID.String}}'
       hx-disabled-elt="find input[type='submit']"
     >
       <div id="user-paid-until-container" class="field">
@@ -144,13 +145,15 @@
         <input
           type="date"
           name="paid-until"
-          value="{{.PaidUntil}}"
-          {{if or $readonly (not .Fee)}}
+          {{if ne .PaidUntil .ConstTimeZero}}
+            value="{{FormatDate .PaidUntil}}"
+          {{end}}
+          {{if or $readonly (not .Profile.Fee)}}
             disabled
           {{end}}
         >
       </div>
-      {{if not .Fee}}
+      {{if not .Profile.Fee}}
         <p>
           This user is not charged and won't be suspended after the end of the paid period.
         </p>
@@ -169,7 +172,7 @@
       id="user-status-form"
       autocomplete="off"
       hx-swap="none"
-      hx-put='{{EncryptURI "users/%s/ban" .UUID}}'
+      hx-put='{{EncryptURI "users/%s/ban" .User.UUID.String}}'
       hx-disabled-elt="find input[type='submit']"
     >
       <div id="user-status-container" class="field">
@@ -207,7 +210,7 @@
 </div>
 
 {{if .Owned}}
-  <div id="peers" hx-swap-oob="true">
+  <div id="peers-list" hx-swap-oob="true">
     <!-- TODO: make peers/requests list reusable -->
     {{if .Owned.PendingPeerRequests}}
       <h3>Pending peer requests ({{len .Owned.PendingPeerRequests}})</h3>
@@ -230,7 +233,7 @@
     {{end}}
 
     <h3>Peers ({{len .Owned.Peers}})</h3>
-    <form action='{{EncryptURI "users/%s/peers/new" .UUID}}' method="get">
+    <form action='{{EncryptURI "users/%s/peers/new" .UUID.String}}' method="get">
       <input type="submit" class="add-new" value="+ Add new"
         {{if not (AuthUser .R).Scopes.Peers.HasW}}
           disabled

@@ -63,7 +63,7 @@ func (repo *subjectsRepo) Get(ctx context.Context, subID string) (auth.StoredSub
 	defer repo.db.RUnlock()
 	repo.db.RLock()
 
-	user, err := repo.db.GetUser(ctx, subID)
+	user, err := repo.db.GetUserByUUID(ctx, subID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return auth.StoredSubject{}, auth.ErrSubjectNotFound
