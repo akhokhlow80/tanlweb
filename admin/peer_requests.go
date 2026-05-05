@@ -17,7 +17,7 @@ func parsePeerRequestFromDB(dbReq *sqlgen.PeerRequest, dbOwner *sqlgen.User, dbN
 	req.RandomID = dbReq.RandomID
 	req.Status, err = peers.ParsePeerRequestStatus(dbReq.Status)
 	if err != nil {
-		return peers.PeerRequest{}, fmt.Errorf("Peer request %d from DB has invalid status: %s", dbReq.RandomID, err)
+		return peers.PeerRequest{}, fmt.Errorf("Peer request %s from DB has invalid status: %s", dbReq.RandomID, err)
 	}
 	req.Sensitive.InterfaceName = dbReq.InterfaceName
 	req.Sensitive.RequestedAt = dbReq.RequestedAt
