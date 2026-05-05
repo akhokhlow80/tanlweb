@@ -1,0 +1,10 @@
+[Unit]
+Description=tanlweb
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/tanlweb/%i/config
+ExecStart=/usr/bin/tanlweb
+
+[Install]
+WantedBy=multi-user.target
