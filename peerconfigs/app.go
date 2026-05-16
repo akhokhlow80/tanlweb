@@ -66,7 +66,7 @@ func (app *App) Serve() error {
 			fmt.Sprintf("attachment; filename=\"%s.conf\"", interfaceName),
 		)
 
-		w.Header().Add("Content-Type", "text/plain")
+		w.Header().Add("Content-Type", "application/octet-stream")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(config.String()))
 	})
