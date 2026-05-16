@@ -10,6 +10,11 @@
     Invalid base URL
   {{end}}
 </span>
+<span id="invalid-allowed-ips" class="error" hx-swap-oob="true">
+  {{if .InvalidAllowedIPs}}
+    Invalid allowed IPs
+  {{end}}
+</span>
 <span id="invalid-tls-client-keypair" class="error" hx-swap-oob="true">
   {{if .InvalidClientKeypair}}
     Invalid client keypair

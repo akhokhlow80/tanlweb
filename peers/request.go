@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/netip"
 	"regexp"
 	"time"
 )
@@ -112,6 +113,7 @@ func (req *PeerRequest) Complete(
 	ctx context.Context,
 	updateRequest UpdateRequestInRepo,
 	createPeer CreatePeerOnNode,
+	allowedIPs []netip.Prefix,
 ) (conf WGQuickConf, peer Peer, interfaceName string, err error) {
 	// Mark request as being processed.
 	*req, err = updateRequest(ctx, req.RandomID, func(ctx context.Context, updReq *PeerRequest) error {
@@ -161,7 +163,9 @@ func (req *PeerRequest) Complete(
 	// It is not a vulnerability, but a very rare bug.
 	// I am not planning to fix it.
 
-	config.NodePeer.AllowedIPs = []string{"0.0.0.0/0", "::/0"}
+	for _, allowedIP := range allowedIPs {
+		config.NodePeer.AllowedIPs = append(config.NodePeer.AllowedIPs, allowedIP.String())
+	}
 
 	return config, peer, interfaceName, nil
 }

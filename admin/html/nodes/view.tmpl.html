@@ -37,6 +37,15 @@
       {{end}}
     />
 
+    <label for="allowed-ips" class="required">AllowedIPs (for peers)</label>
+    <span id="invalid-allowed-ips"></span>
+    <textarea name="allowed-ips" type="text" value="{{.Node.AllowedIPs.String}}"
+      rows="7"
+      {{if $readonly}}
+        disabled
+      {{end}}
+    >{{.Node.AllowedIPs.String}}</textarea>
+
     {{if not .New}}
       <details>
         <summary>TLS certs</summary>

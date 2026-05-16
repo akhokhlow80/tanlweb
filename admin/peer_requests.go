@@ -80,6 +80,7 @@ func (app *App) putPendingPeerRequestToCache(req peers.PeerRequest) error {
 		PeerRequest:   req,
 		CreatePeer:    nodeClient.CreatePeer,
 		UpdateRequest: app.updatePeerRequestInDB,
+		AllowedIPs:    nodeClient.Node.AllowedIPs,
 	})
 	return nil
 }

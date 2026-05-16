@@ -142,6 +142,7 @@ func (app *App) initNodesClient() error {
 			dbNode.Uuid,
 			dbNode.BaseUrl,
 			dbNode.Name,
+			dbNode.AllowedIps,
 			nodes.TLSClientConfig{
 				ClientKey:  dbNode.TlsClientKey,
 				ClientCert: dbNode.TlsClientCert,

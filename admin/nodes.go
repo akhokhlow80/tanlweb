@@ -67,6 +67,7 @@ func (app *App) addNodeHandler(w http.ResponseWriter, r *http.Request) error {
 		uuid.NewString(),
 		web.FormTrimmedScalar(r.Form, "base-url"),
 		web.FormTrimmedScalar(r.Form, "name"),
+		web.FormTrimmedScalar(r.Form, "allowed-ips"),
 		nodes.TLSClientConfig{
 			ClientKey:  web.FormTrimmedScalar(r.Form, "tls-client-key"),
 			ClientCert: web.FormTrimmedScalar(r.Form, "tls-client-cert"),
@@ -89,6 +90,7 @@ func (app *App) addNodeHandler(w http.ResponseWriter, r *http.Request) error {
 			TlsClientKey:  node.TLSConf.ClientKey,
 			TlsClientCert: node.TLSConf.ClientCert,
 			TlsServerCert: node.TLSConf.ServerCert,
+			AllowedIps:    node.AllowedIPs.String(),
 		})
 	}()
 	if err != nil {
@@ -132,6 +134,7 @@ func (app *App) updateNodeHandler(w http.ResponseWriter, r *http.Request) error 
 		r.PathValue("uuid"),
 		web.FormTrimmedScalar(r.Form, "base-url"),
 		web.FormTrimmedScalar(r.Form, "name"),
+		web.FormTrimmedScalar(r.Form, "allowed-ips"),
 		nodes.TLSClientConfig{
 			ClientKey:  web.FormTrimmedScalar(r.Form, "tls-client-key"),
 			ClientCert: web.FormTrimmedScalar(r.Form, "tls-client-cert"),
@@ -154,6 +157,7 @@ func (app *App) updateNodeHandler(w http.ResponseWriter, r *http.Request) error 
 			TlsClientKey:  node.TLSConf.ClientKey,
 			TlsClientCert: node.TLSConf.ClientCert,
 			TlsServerCert: node.TLSConf.ServerCert,
+			AllowedIps:    node.AllowedIPs.String(),
 		})
 	}()
 	if err != nil {
@@ -172,6 +176,7 @@ func (app *App) updateNodeHandler(w http.ResponseWriter, r *http.Request) error 
 		dbNode.Uuid,
 		dbNode.BaseUrl,
 		dbNode.Name,
+		dbNode.AllowedIps,
 		nodes.TLSClientConfig{
 			ClientKey:  dbNode.TlsClientKey,
 			ClientCert: dbNode.TlsClientCert,
@@ -225,6 +230,7 @@ func (app *App) nodePageHandler(w http.ResponseWriter, r *http.Request) error {
 		dbNode.Uuid,
 		dbNode.BaseUrl,
 		dbNode.Name,
+		dbNode.AllowedIps,
 		nodes.TLSClientConfig{
 			ClientKey:  dbNode.TlsClientKey,
 			ClientCert: dbNode.TlsClientCert,
@@ -265,6 +271,7 @@ func (app *App) nodesListHandler(w http.ResponseWriter, r *http.Request) error {
 			dbNode.Uuid,
 			dbNode.BaseUrl,
 			dbNode.Name,
+			dbNode.AllowedIps,
 			nodes.TLSClientConfig{
 				ClientKey:  dbNode.TlsClientKey,
 				ClientCert: dbNode.TlsClientCert,

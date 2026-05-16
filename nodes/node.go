@@ -19,6 +19,7 @@ type Node struct {
 	UUID          uuid.UUID
 	BaseURL       *url.URL // absolute, https, not nil after parsing
 	Name          string
+	AllowedIPs    AllowedIPs
 	TLSConf       TLSClientConfig
 	parsedTLSConf *tls.Config // not nil after parsing
 }
@@ -29,6 +30,7 @@ type NodeParseErrors struct {
 	EmptyName            bool
 	InvalidClientKeypair bool
 	InvalidServerCert    bool
+	InvalidAllowedIPs    bool
 }
 
 func (errs *NodeParseErrors) ok() bool {
@@ -36,7 +38,8 @@ func (errs *NodeParseErrors) ok() bool {
 		errs.InvalidBaseURL ||
 		errs.EmptyName ||
 		errs.InvalidClientKeypair ||
-		errs.InvalidServerCert)
+		errs.InvalidServerCert ||
+		errs.InvalidAllowedIPs)
 }
 
 func (errs *NodeParseErrors) Error() string {
@@ -56,20 +59,24 @@ func (errs *NodeParseErrors) Error() string {
 	if errs.InvalidServerCert {
 		reasons = append(reasons, "invalid server cert")
 	}
+	if errs.InvalidAllowedIPs {
+		reasons = append(reasons, "invalid allowed ips")
+	}
 	return "Failed to parse node: " + strings.Join(reasons, ", ")
 }
 
 var _ error = (*NodeParseErrors)(nil)
 
 func ParseNode(
-	UUID string,
+	nodeUUID string,
 	baseURL string,
-	Name string,
+	name string,
+	allowedIPs string,
 	tlsConf TLSClientConfig,
 ) (Node, *NodeParseErrors) {
 	var errs NodeParseErrors
 
-	parsedUUID, err := uuid.Parse(UUID)
+	parsedUUID, err := uuid.Parse(nodeUUID)
 	if err != nil {
 		errs.InvalidUUID = true
 	}
@@ -79,10 +86,10 @@ func ParseNode(
 		errs.InvalidBaseURL = true
 	}
 
-	if len(strings.TrimSpace(Name)) == 0 {
+	if len(strings.TrimSpace(name)) == 0 {
 		errs.EmptyName = true
 	}
-	validatedName := Name
+	validatedName := name
 
 	caCertPool := x509.NewCertPool()
 	if !caCertPool.AppendCertsFromPEM([]byte(tlsConf.ServerCert)) {
@@ -97,6 +104,11 @@ func ParseNode(
 		RootCAs:      caCertPool,
 	}
 
+	parsedAllowedIPs, err := ParseAllowedIPs(allowedIPs)
+	if err != nil {
+		errs.InvalidAllowedIPs = true
+	}
+
 	if !errs.ok() {
 		return Node{}, &errs
 	}
@@ -105,6 +117,7 @@ func ParseNode(
 		parsedUUID,
 		parsedBaseURL,
 		validatedName,
+		parsedAllowedIPs,
 		tlsConf,
 		&parsedTlsConf,
 	}, nil

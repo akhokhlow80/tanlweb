@@ -16,6 +16,7 @@ type Node struct {
 	TlsClientKey  string
 	TlsClientCert string
 	TlsServerCert string
+	AllowedIps    string
 }
 
 type PeerRequest struct {

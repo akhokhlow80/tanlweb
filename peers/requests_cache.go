@@ -2,12 +2,14 @@ package peers
 
 import (
 	"context"
+	"net/netip"
 	"sync"
 )
 
 type CachedPendingPeerRequest struct {
 	CreatePeer    CreatePeerOnNode
 	UpdateRequest UpdateRequestInRepo
+	AllowedIPs    []netip.Prefix
 	PeerRequest
 }
 
@@ -64,7 +66,7 @@ func (req *CachedPendingPeerRequest) Complete(ctx context.Context) (
 	interfaceName string,
 	err error,
 ) {
-	return req.PeerRequest.Complete(ctx, req.UpdateRequest, req.CreatePeer)
+	return req.PeerRequest.Complete(ctx, req.UpdateRequest, req.CreatePeer, req.AllowedIPs)
 }
 
 // Errors: ErrRequestIsNotPending, ErrRequestNotFound
