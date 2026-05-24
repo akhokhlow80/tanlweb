@@ -170,15 +170,17 @@ func (repo *subjectsRepo) GetAndUpdateForLogin(ctx context.Context, subID string
 }
 
 func (app *App) authenticate(w http.ResponseWriter, r *http.Request) (auth.Subject, error) {
+	var accessToken, refreshToken string
+
 	accessTokenCookie, err := r.Cookie("access_token")
-	if err != nil {
-		return auth.Subject{}, errUnauthorized
+	if err == nil {
+		accessToken = accessTokenCookie.Value
 	}
 	refreshTokenCookie, err := r.Cookie("refresh_token")
-	if err != nil {
-		return auth.Subject{}, errUnauthorized
+	if err == nil {
+		refreshToken = refreshTokenCookie.Value
 	}
-	newAccessToken, sub, err := app.auth.Authenticate(r.Context(), accessTokenCookie.Value, refreshTokenCookie.Value)
+	newAccessToken, sub, err := app.auth.Authenticate(r.Context(), accessToken, refreshToken)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidToken) || errors.Is(err, auth.ErrSubjectNotFound) {
 			return auth.Subject{}, errUnauthorized
