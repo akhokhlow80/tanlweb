@@ -1,0 +1,20 @@
+<div id="peers-list">
+  {{range .}}
+    <div>
+      <p>
+        Node <a href='{{EncryptURI "nodes/%s" .NodeUUID}}'>{{.NodeName}}</a>:
+      </p>
+      <div
+        id="node-{{.NodeUUID}}-peers"
+        class="peers-list-container"
+        hx-get="{{EncryptURI .LoadURL}}"
+        hx-trigger="load"
+        hx-swap="outerHTML"
+        hx-on:htmx:send-error="handleDeferredFetchResult('Network error')(event)"
+        hx-on:htmx:response-error="handleDeferredFetchResult('Error response')(event)"
+      >
+        <div class="loading-indicator"></div>
+      </div>
+    </div>
+  {{end}}
+</div>

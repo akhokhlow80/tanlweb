@@ -14,6 +14,7 @@ a:not([href]) {
 }
 
 @media only screen and (min-width: 600px) {
+  /* FIXME: too broad */
   main *:not(h1, h2, h3, div, button, span, summary) {
     margin-left: 5pt;
     max-width: 500pt;
@@ -48,6 +49,10 @@ textarea {
   width: 100%;
 }
 
+.error {
+  color: #eb3434;
+}
+
 /* Navigation */
 
 #navigation {
@@ -62,6 +67,10 @@ textarea {
 
 #navigation a.current {
   text-decoration: underline;
+}
+
+.loading-indicator {
+  color: #aaa;
 }
 
 /* Forms */
@@ -170,9 +179,12 @@ label.required::after {
 
 /* Tables */
 
-table {
+table.with-margin {
   margin: 5pt;
   margin-top: 20pt;
+}
+
+table {
   border-collapse: collapse;
   display: block;
   overflow-x: auto;
@@ -183,8 +195,8 @@ table thead {
   background-color: rgb(220, 220, 220);
 }
 
-table tr.disabled {
-  background-color: rgb(240, 150, 150);
+table tr.bad {
+  background-color: rgb(255, 162, 162);
 }
 
 table td {
@@ -276,10 +288,6 @@ input.add-new {
   margin-top: 1.5pt;
 }
 
-.load-peers-error {
-  color: rgb(230, 30, 30);
-}
-
 .peer-status-enabled {
   color: #238c3f;
 }
@@ -288,3 +296,6 @@ input.add-new {
   color: #b02121;
 }
 
+.peers-list-container > * {
+  margin: 10pt;
+}

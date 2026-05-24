@@ -31,7 +31,7 @@ type App struct {
 	reqCipher    *reqencrypt.Cipher
 	tmpl         *template.Template
 	auth         *auth.Service
-	nodeClients  *nodes.MultiClient
+	nodeClients  *nodes.ClientsCache
 }
 
 var (
@@ -136,7 +136,7 @@ func (app *App) initNodesClient() error {
 		return err
 	}
 
-	app.nodeClients = nodes.NewMultiClient()
+	app.nodeClients = nodes.NewClientsCache()
 	for _, dbNode := range dbNodes {
 		node, parseErrs := nodes.ParseNode(
 			dbNode.Uuid,
@@ -230,12 +230,11 @@ func (app *App) makeTLSConfig() (*tls.Config, error) {
 
 func (app *App) Serve() error {
 	securedMux := http.NewServeMux()
-	// TODO: enable caching for static files
 	securedMux.Handle("/static/", http.FileServer(http.FS(staticFiles)))
-	// TODO: disable caching for pages
 	app.registerNodeHandlers(securedMux)
 	app.registerUsersHandlers(securedMux)
 	app.registerIndexPage(securedMux)
+	app.registerPeerRequestHandlers(securedMux)
 	app.registerPeerHandlers(securedMux)
 
 	mux := http.NewServeMux()

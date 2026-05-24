@@ -55,6 +55,36 @@ function copyToClipboard(text) {
   navigator.clipboard.writeText(text).catch(err => console.error('Failed to copy: ', err));
 }
 
-document.addEventListener("htmx:afterSettle", function(evt) { convertTimeStamps() })
-document.addEventListener("DOMContentLoaded", function(evt) { convertTimeStamps() })
+function animateLoadingIndicators() {
+  let all = document.querySelectorAll(".loading-indicator")
+  document.querySelectorAll(".loading-indicator").forEach((el) => {
+    let counter = 1 // 1, 2, 3, 1, ...
+    function update() {
+      el.textContent = `Loading${'.'.repeat(counter)}`
+      counter = (counter) % 3 + 1
+    }
+    update()
+    setInterval(update, 850);
+  })
+}
+
+function handleDeferredFetchResult(error) {
+  return function(evt) {
+    console.log(evt)
+    if (evt.detail.successful)
+      return
+    evt.detail.target.innerHTML = '<div class="error">' + error + '</div>'
+  }
+}
+
+document.addEventListener("htmx:afterSettle", function(evt) {
+  convertTimeStamps()
+})
+document.addEventListener("DOMContentLoaded", function(evt) {
+  convertTimeStamps()
+ })
+document.addEventListener("htmx:beforeRequest", function(evt) {
+  convertTimeStamps()
+  animateLoadingIndicators()
+})
 setInterval(convertTimeStamps, 20 * 1000)

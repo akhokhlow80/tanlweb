@@ -187,13 +187,12 @@ func (app *App) updateNodeHandler(w http.ResponseWriter, r *http.Request) error 
 		return parseErrs
 	}
 
-	client := app.nodeClients.GetClient(node.UUID.String())
+	client := app.nodeClients.Get(node.UUID.String())
 	if client == nil {
 		// impossible
 		return fmt.Errorf("No client found for node %s", node.UUID)
-	} else {
-		client.Update(node)
 	}
+	client.Update(node)
 
 	if err := app.renderNotification(w, notification{Ok: true, Message: "Updated"}); err != nil {
 		return err

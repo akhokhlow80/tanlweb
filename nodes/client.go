@@ -41,51 +41,52 @@ func validateUserOwner(owner string) bool {
 }
 
 // owner is optional; calling with empty will result in return of all peers from the node
-func (client *Client) getPeersByOwner(ctx context.Context, owner string) ([]PeerFromNode, error) {
-	defer client.RUnlock()
-	client.RLock()
+func (client *Client) GetPeers(ctx context.Context, ownerUUID string) ([]PeerFromNode, error) {
+	peers, err := func() ([]PeerFromNode, error) {
+		defer client.RUnlock()
+		client.RLock()
 
-	query := url.Values{}
-	query.Add("owner", owner)
-	uri := client.Node.BaseURL.String() + "/api/v1/peers?" + query.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
-	if err != nil {
-		return nil, err
-	}
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: client.Node.parsedTLSConf,
-		},
-	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GET %s returned code %d", uri, resp.StatusCode)
-	}
-
-	var respPeers []peers.Peer
-	if err = json.NewDecoder(resp.Body).Decode(&respPeers); err != nil {
-		return nil, err
-	}
-	peersFromNode := make([]PeerFromNode, 0, len(respPeers))
-	for _, peer := range respPeers {
-		if !validateUserOwner(peer.UserUUID) {
-			log.Printf("Got peer with non-valid owner %s in GET %s query response", peer.UserUUID, uri)
-			continue
+		query := url.Values{}
+		if ownerUUID != "" {
+			query.Add("owner", ownerUUID)
 		}
-		peersFromNode = append(peersFromNode, PeerFromNode{peer, client.Node})
-	}
-	return peersFromNode, nil
-}
+		uri := client.Node.BaseURL.String() + "/api/v1/peers?" + query.Encode()
 
-func (client *Client) GetPeers(ctx context.Context) ([]PeerFromNode, error) {
-	peers, err := client.getPeersByOwner(ctx, "")
+		req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
+		if err != nil {
+			return nil, err
+		}
+		httpClient := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: client.Node.parsedTLSConf,
+			},
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("GET %s returned code %d", uri, resp.StatusCode)
+		}
+
+		var respPeers []peers.Peer
+		if err = json.NewDecoder(resp.Body).Decode(&respPeers); err != nil {
+			return nil, err
+		}
+		peersFromNode := make([]PeerFromNode, 0, len(respPeers))
+		for _, peer := range respPeers {
+			if !validateUserOwner(peer.UserUUID) {
+				log.Printf("Got peer with non-valid owner %s in GET %s query response", peer.UserUUID, uri)
+				continue
+			}
+			peersFromNode = append(peersFromNode, PeerFromNode{peer, client.Node})
+		}
+		return peersFromNode, nil
+	}()
 	if err != nil {
 		return nil, err
 	}
+
 	sortPeers(peers)
 	return peers, nil
 }
@@ -162,7 +163,11 @@ func (client *Client) GetPeer(ctx context.Context, pubkey string) (*PeerFromNode
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GET %s returned code %d", uri, resp.StatusCode)
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, nil
+		} else {
+			return nil, fmt.Errorf("GET %s returned code %d", uri, resp.StatusCode)
+		}
 	}
 
 	var peer peers.Peer
@@ -178,13 +183,4 @@ func (client *Client) GetPeer(ctx context.Context, pubkey string) (*PeerFromNode
 		Peer: peer,
 		Node: client.Node,
 	}, nil
-}
-
-func (client *Client) GetUserPeers(ctx context.Context, userUUID string) ([]PeerFromNode, error) {
-	peers, err := client.getPeersByOwner(ctx, userUUID)
-	if err != nil {
-		return nil, err
-	}
-	sortPeers(peers)
-	return peers, nil
 }
