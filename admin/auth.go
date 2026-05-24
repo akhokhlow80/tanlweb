@@ -22,7 +22,11 @@ func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) error {
 	refreshToken, err := app.auth.LoginForRefreshToken(r.Context(), token)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidToken) || errors.Is(err, auth.ErrSubjectNotFound) {
-			return errUnauthorized
+			// If the user is logged in and cookies are set, they will be redirected to the admin interface.
+			// Otherwise, they will be shown standard "unauthorized" response.
+			w.Header().Set("Location", app.encryptURI(""))
+			w.WriteHeader(http.StatusSeeOther)
+			return nil
 		} else {
 			return err
 		}
@@ -31,19 +35,19 @@ func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) error {
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		Path:     "/",
+		MaxAge:   app.cfg.RefreshTokenLifetime,
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 	}
 	accessCookie := http.Cookie{
 		Name:     "access_token",
 		Value:    "",
 		Path:     "/",
+		MaxAge:   app.cfg.AccessTokenLifetime,
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-	}
-	if !app.cfg.DebugMode {
-		refreshCookie.Secure = true
-		accessCookie.Secure = true
 	}
 	http.SetCookie(w, &refreshCookie)
 	http.SetCookie(w, &accessCookie)
@@ -189,6 +193,7 @@ func (app *App) authenticate(w http.ResponseWriter, r *http.Request) (auth.Subje
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   true,
+			MaxAge:   app.cfg.AccessTokenLifetime,
 			SameSite: http.SameSiteStrictMode,
 		})
 	}
@@ -202,11 +207,11 @@ func (app *App) authenticationMiddleware(h http.Handler) http.Handler {
 		sub, err := app.authenticate(w, r)
 		if err != nil {
 			if errors.Is(err, errUnauthorized) {
-				http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			} else {
 				reqlog.Printf(r, "Internal server error during authentication: %s", err)
-				http.Error(w, "500 Internal server error", http.StatusInternalServerError)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
 		}
