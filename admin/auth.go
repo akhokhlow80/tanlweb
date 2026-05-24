@@ -180,6 +180,7 @@ func (app *App) authenticate(w http.ResponseWriter, r *http.Request) (auth.Subje
 	}
 	newAccessToken, sub, err := app.auth.Authenticate(r.Context(), accessTokenCookie.Value, refreshTokenCookie.Value)
 	if err != nil {
+		reqlog.Printf(r, "ERR %s", err)
 		if errors.Is(err, auth.ErrInvalidToken) || errors.Is(err, auth.ErrSubjectNotFound) {
 			return auth.Subject{}, errUnauthorized
 		} else {
@@ -204,8 +205,10 @@ type authenticatedUserCtxKey struct{}
 
 func (app *App) authenticationMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqlog.Printf(r, "AUTH ATTEMPT")
 		sub, err := app.authenticate(w, r)
 		if err != nil {
+			reqlog.Printf(r, "AUTH FAIL %s", err)
 			if errors.Is(err, errUnauthorized) {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
