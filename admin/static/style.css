@@ -316,3 +316,7 @@ tr.peers-total {
 .config-url-qr-code p {
   font-weight: 700;
 }
+
+.config-url-qr-code img {
+  image-rendering: pixelated;
+}
