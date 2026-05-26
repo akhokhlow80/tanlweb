@@ -211,7 +211,6 @@
 
 {{if .Owned}}
   <div id="peers-list" hx-swap-oob="true">
-    <!-- TODO: make peers/requests list reusable -->
     {{if .Owned.PendingPeerRequests}}
       <h3>Pending peer requests ({{len .Owned.PendingPeerRequests}})</h3>
       <table>
@@ -232,7 +231,6 @@
       </table>
     {{end}}
 
-    <h3>Peers ({{len .Owned.Peers}})</h3>
     <form action='{{EncryptURI "users/%s/peers/new" .UUID.String}}' method="get">
       <input type="submit" class="add-new" value="+ Add new"
         {{if not (AuthUser .R).Scopes.Peers.HasW}}
@@ -240,25 +238,9 @@
         {{end}}
        />
     </form>
-    <table>
-      <thead>
-        <tr>
-          <td>Public key</td>
-          <td>Node</td>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .Owned.Peers}}
-          <tr>
-            <td>
-              <a href='{{EncryptURI "peers/%s" .PublicKey}}'>{{.PublicKey}}</a>
-            </td>
-            <td>
-              <a href='{{EncryptURI "nodes/%s" .Node.UUID.String}}'>{{.Node.Name}}</a>
-            </td>
-          </tr>
-        {{end}}
-      </tbody>
-    </table>
+
+    <h3>Peers</h3>
+
+    {{template "peers/list-skeleton" .Owned.DeferredPeersLoads}}
   </div>
 {{end}}

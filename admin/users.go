@@ -4,7 +4,6 @@ import (
 	"akhokhlow80/tanlweb/admin/auth"
 	"akhokhlow80/tanlweb/admin/users"
 	"akhokhlow80/tanlweb/db"
-	"akhokhlow80/tanlweb/nodes"
 	"akhokhlow80/tanlweb/peers"
 	"akhokhlow80/tanlweb/sqlgen"
 	"akhokhlow80/tanlweb/web"
@@ -98,9 +97,8 @@ func (app *App) registerUsersHandlers(m *http.ServeMux) {
 }
 
 type userOwnedPeers struct {
-	Peers               []nodes.PeerFromNode
-	PeersRetrievalError error
 	PendingPeerRequests []peers.PeerRequest
+	DeferredPeersLoads  []deferredPeersLoadFromNode
 }
 
 type singleUserView struct {
@@ -196,9 +194,12 @@ func (app *App) addUserHandler(w http.ResponseWriter, r *http.Request) error {
 		w,
 		"users/view",
 		singleUserView{
-			User:  user,
-			R:     r,
-			Owned: &userOwnedPeers{},
+			User: user,
+			R:    r,
+			Owned: &userOwnedPeers{
+				PendingPeerRequests: nil,
+				DeferredPeersLoads:  nil,
+			},
 		},
 	)
 }
@@ -406,7 +407,6 @@ func (app *App) userPageHandler(w http.ResponseWriter, r *http.Request) error {
 		reqs = append(reqs, req)
 	}
 
-	peers, errsByNode := app.nodeClients.GetUserPeers(r.Context(), userUuid)
 	user, err := parseUserFromDB(&dbUser)
 	if err != nil {
 		return err
@@ -417,8 +417,11 @@ func (app *App) userPageHandler(w http.ResponseWriter, r *http.Request) error {
 		singleUserView{
 			User: user,
 			Owned: &userOwnedPeers{
-				Peers:               peers,
-				PeersRetrievalError: errsByNode.Error(),
+				DeferredPeersLoads: app.deferredPeersLoadsForURL(func(nodeUUID string) string {
+					query := url.Values{}
+					query.Add("user_uuid", user.UUID.String())
+					return fmt.Sprintf("nodes/%s/peers?%s", url.PathEscape(nodeUUID), query.Encode())
+				}),
 				PendingPeerRequests: reqs,
 			},
 			R: r,
@@ -426,7 +429,7 @@ func (app *App) userPageHandler(w http.ResponseWriter, r *http.Request) error {
 	)
 }
 
-type usersListView struct {
+type usersListPage struct {
 	R     *http.Request
 	Users []users.User
 }
@@ -455,7 +458,7 @@ func (app *App) usersListHandler(w http.ResponseWriter, r *http.Request) error {
 	return app.tmpl.ExecuteTemplate(
 		w,
 		"users/list",
-		usersListView{
+		usersListPage{
 			R:     r,
 			Users: users,
 		},

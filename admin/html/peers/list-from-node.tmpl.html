@@ -1,0 +1,34 @@
+{{$showOwner := .ShowOwner}}
+<div
+  id="node-{{.NodeUUID}}-peers"
+  class="peers-list-container"
+>
+  <table>
+    <thead>
+      <tr>
+        <td>Public Key</td>
+        {{if $showOwner}}
+          <td>Owner</td>
+        {{end}}
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Peers}}
+        <tr>
+          <td>
+            <a href='{{EncryptURI "nodes/%s/peers/%s" .Node.UUID.String .PublicKey}}'>
+              {{.ShortenPublicKey}}
+            </a>
+          </td>
+          {{if $showOwner}}
+            <td>
+              <a href='{{EncryptURI "users/%s" .UserUUID}}'>
+                {{ShortenUUID .UserUUID}}
+              </a>
+            </td>
+          {{end}}
+        </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>

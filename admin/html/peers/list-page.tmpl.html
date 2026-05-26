@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    {{template "head"}}
+  </head>
+  <body>
+    <div id="notifications-container"></div>
+    {{template "navigation" (NavParams .R "peers")}}
+    <main>
+      {{if .Requests}}
+        <details>
+          <summary>
+            Incomplete requests ({{len .Requests}})
+          </summary>
+          <table class="with-margin">
+            <thead>
+              <tr>
+                <td>ID</td>
+                <td>For user</td>
+                <td>Requested by</td>
+                <td>Node</td>
+                <td>Added</td>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Requests}}
+                <tr
+                  {{if eq .Status .ConstStatus.Failed}}
+                    class="bad"
+                  {{end}}
+                >
+                  <td>
+                    <a href='{{EncryptURI "peers/requests/%s" .RandomID}}'>{{.ShortRandomID}}</a>
+                  </td>
+                  <td>
+                    <a href='{{EncryptURI "users/%s" .OwnedByUserUUID}}'>{{ShortenUUID .OwnedByUserUUID}}</a>
+                  </td>
+                  <td>
+                    {{if not .Status.Completed}}
+                      <a href='{{EncryptURI "users/%s" .RequestedByUserUUID}}'>
+                        {{ShortenUUID .RequestedByUserUUID}}
+                      </a>
+                    {{end}}
+                  </td>
+                  <td>
+                    <a href='{{EncryptURI "nodes/%s" .NodeUUID}}'>{{.NodeName}}</a>
+                  </td>
+                  {{if not .Status.Completed}}
+                    <td
+                      timestamp="{{.RequestedAtUnix}}"
+                      timestamp-format="ago"
+                    ></td>
+                  {{else}}
+                    <td></td>
+                  {{end}}
+                </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </details>
+      {{end}}
+      {{template "peers/list-skeleton" .DeferredPeersLoads}}
+    </main>
+  </body>
+</html>
+
