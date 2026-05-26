@@ -203,16 +203,15 @@
         {{end}}
       />
     </form>
-
-    <hr>
-
   {{end}}
 </div>
 
-{{if .Owned}}
+{{if and .Owned (AuthUser .R).Scopes.Peers.HasR}}
+  <hr>
+
   <div id="peers-list" hx-swap-oob="true">
+    <h3>Pending peer requests ({{len .Owned.PendingPeerRequests}})</h3>
     {{if .Owned.PendingPeerRequests}}
-      <h3>Pending peer requests ({{len .Owned.PendingPeerRequests}})</h3>
       <table>
         <thead>
           <tr>
@@ -240,7 +239,8 @@
     </form>
 
     <h3>Peers</h3>
-
-    {{template "peers/list-skeleton" .Owned.DeferredPeersLoads}}
+    {{if .Owned.DeferredPeersLoads}}
+      {{template "peers/list-skeleton" .Owned.DeferredPeersLoads}}
+    {{end}}
   </div>
 {{end}}
