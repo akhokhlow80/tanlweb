@@ -53,6 +53,13 @@ textarea {
   color: #eb3434;
 }
 
+.with-tooltip::after {
+  font-size: 10pt;
+  content: "?";
+  color: #686868;
+  vertical-align: super;
+}
+
 /* Navigation */
 
 #navigation {

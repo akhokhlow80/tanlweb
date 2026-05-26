@@ -27,6 +27,7 @@ func (mc *ClientsCache) Get(nodeUUID string) *Client {
 	return mc.clients[nodeUUID]
 }
 
+// TODO: return sorted
 func (mc *ClientsCache) Clients() []*Client {
 	defer mc.RUnlock()
 	mc.RLock()

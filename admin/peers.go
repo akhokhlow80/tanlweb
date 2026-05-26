@@ -2,6 +2,7 @@ package admin
 
 import (
 	"akhokhlow80/tanlweb/admin/auth"
+	"akhokhlow80/tanlweb/admin/byteunits"
 	"akhokhlow80/tanlweb/nodes"
 	"akhokhlow80/tanlweb/peers"
 	"akhokhlow80/tanlweb/reqlog"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type deferredPeersLoadFromNode struct {
@@ -50,10 +52,27 @@ type deferredPeersLoadErrorView struct {
 	NodeUUID string
 }
 
+type peerPrettyTransStat struct {
+	Tx string
+	Rx string
+}
+
+func newPeerPrettyTransStat(stat peers.TransStat) peerPrettyTransStat {
+	return peerPrettyTransStat{
+		Tx: byteunits.PrettyPrint(stat.Tx),
+		Rx: byteunits.PrettyPrint(stat.Rx),
+	}
+}
+
+type peerWithStatView struct {
+	Peer           nodes.PeerFromNode
+	MonthTransStat peerPrettyTransStat
+}
+
 type peersListFromNodeView struct {
 	NodeUUID  string
 	ShowOwner bool
-	Peers     []nodes.PeerFromNode
+	Peers     []peerWithStatView
 }
 
 func (app *App) getPeersFromNodeHandler(w http.ResponseWriter, r *http.Request) error {
@@ -79,11 +98,28 @@ func (app *App) getPeersFromNodeHandler(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			return peersListFromNodeView{}, err
 		}
+		monthStats, err := client.GetPeerStats(
+			r.Context(),
+			userUUID,
+			time.Now().Add(-30*24*time.Hour),
+			time.Time{},
+		)
+		if err != nil {
+			return peersListFromNodeView{}, err
+		}
+
+		peersWithStats := make([]peerWithStatView, 0, len(peers))
+		for _, peer := range peers {
+			peersWithStats = append(peersWithStats, peerWithStatView{
+				Peer:           peer,
+				MonthTransStat: newPeerPrettyTransStat(monthStats[peer.PublicKey]),
+			})
+		}
 
 		return peersListFromNodeView{
 			NodeUUID:  nodeUUID,
 			ShowOwner: userUUID == "",
-			Peers:     peers,
+			Peers:     peersWithStats,
 		}, nil
 	}()
 	if err != nil {

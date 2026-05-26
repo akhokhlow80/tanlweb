@@ -9,7 +9,9 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -43,6 +45,7 @@ func validateUserOwner(owner string) bool {
 // owner is optional; calling with empty will result in return of all peers from the node
 func (client *Client) GetPeers(ctx context.Context, ownerUUID string) ([]PeerFromNode, error) {
 	peers, err := func() ([]PeerFromNode, error) {
+		// TODO: unlock after HTTP client is configured
 		defer client.RUnlock()
 		client.RLock()
 
@@ -91,7 +94,71 @@ func (client *Client) GetPeers(ctx context.Context, ownerUUID string) ([]PeerFro
 	return peers, nil
 }
 
-func (client *Client) CreatePeer(ctx context.Context, Owner string) (peers.WGQuickConf, peers.Peer, error) {
+func (client *Client) GetPeerStats(
+	ctx context.Context,
+	ownerUUID string,
+	from time.Time,
+	to time.Time,
+) (map[string]peers.TransStat, error) {
+	query := url.Values{}
+	if ownerUUID != "" {
+		query.Add("owner", ownerUUID)
+	}
+	if !from.IsZero() {
+		query.Add("from_ms", strconv.FormatInt(from.UnixMilli(), 10))
+	}
+	if !to.IsZero() {
+		query.Add("to_ms", strconv.FormatInt(to.UnixMilli(), 10))
+	}
+
+	url := client.Node.BaseURL.String() + "/api/v1/peers/stat?" + query.Encode()
+
+	httpClient, req, err := func() (*http.Client, *http.Request, error) {
+		defer client.RUnlock()
+		client.RLock()
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: client.Node.parsedTLSConf,
+			},
+		}, req, nil
+	}()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s returned code %d", url, resp.StatusCode)
+	}
+
+	var respStats []struct {
+		PublicKeyBase64 string `json:"public_key_base64"`
+		Tx              int64  `json:"tx"`
+		Rx              int64  `json:"rx"`
+	}
+	if err = json.NewDecoder(resp.Body).Decode(&respStats); err != nil {
+		return nil, err
+	}
+
+	statsMap := make(map[string]peers.TransStat, len(respStats))
+	for _, respStat := range respStats {
+		statsMap[respStat.PublicKeyBase64] = peers.TransStat{
+			Tx: respStat.Tx,
+			Rx: respStat.Rx,
+		}
+	}
+	return statsMap, nil
+}
+
+func (client *Client) CreatePeer(ctx context.Context, owner string) (peers.WGQuickConf, peers.Peer, error) {
 	defer client.RUnlock()
 	client.RLock()
 
@@ -100,7 +167,7 @@ func (client *Client) CreatePeer(ctx context.Context, Owner string) (peers.WGQui
 		RandomPresharedKey bool   `json:"random_preshared_key"`
 	}
 
-	reqBytes, err := json.Marshal(apiCreatePeerReq{Owner: Owner, RandomPresharedKey: true})
+	reqBytes, err := json.Marshal(apiCreatePeerReq{Owner: owner, RandomPresharedKey: true})
 	if err != nil {
 		return peers.WGQuickConf{}, peers.Peer{}, err
 	}

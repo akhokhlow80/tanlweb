@@ -25,5 +25,15 @@
         <p class="value peer-status-disabled">Disabled</p>
       {{end}}
     </div>
+    <div class="field">
+      <p class="name">Endpoint:</p>
+      <p>
+        {{if .LatestEndpoint}}
+          {{.LatestEndpoint}}
+        {{else}}
+          (none)
+        {{end}}
+      </p>
+    </div>
   </div>
 </div>

@@ -10,23 +10,45 @@
         {{if $showOwner}}
           <td>Owner</td>
         {{end}}
+        <td
+          class="with-tooltip"
+          title="Sent/received."
+        >
+          Month tx/rx
+        </td>
+        <td
+          class="with-tooltip"
+          title="This field is not guaranteed to be updated in real-time. It depends on the update interval configured for this node."
+        >
+          Latest handshake
+        </td>
       </tr>
     </thead>
     <tbody>
       {{range .Peers}}
         <tr>
           <td>
-            <a href='{{EncryptURI "nodes/%s/peers/%s" .Node.UUID.String .PublicKey}}'>
-              {{.ShortenPublicKey}}
+            <a href='{{EncryptURI "nodes/%s/peers/%s" .Peer.Node.UUID.String .Peer.PublicKey}}'>
+              {{.Peer.ShortenPublicKey}}
             </a>
           </td>
           {{if $showOwner}}
             <td>
-              <a href='{{EncryptURI "users/%s" .UserUUID}}'>
-                {{ShortenUUID .UserUUID}}
+              <a href='{{EncryptURI "users/%s" .Peer.UserUUID}}'>
+                {{ShortenUUID .Peer.UserUUID}}
               </a>
             </td>
           {{end}}
+          <td>
+            <div>↑{{.MonthTransStat.Tx}}</div>
+            <div>↓{{.MonthTransStat.Rx}}</div>
+          </td>
+          <td
+            {{if not .Peer.LatestHandshake.IsZero}}
+              timestamp="{{.Peer.LatestHandshake.Unix}}"
+              timestamp-format="ago"
+            {{end}}
+          ></td>
         </tr>
       {{end}}
     </tbody>
