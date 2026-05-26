@@ -57,10 +57,10 @@ type peerPrettyTransStat struct {
 	Rx string
 }
 
-func newPeerPrettyTransStat(stat peers.TransStat) peerPrettyTransStat {
+func newPeerPrettyTransStat(tx, rx int64) peerPrettyTransStat {
 	return peerPrettyTransStat{
-		Tx: byteunits.PrettyPrint(stat.Tx),
-		Rx: byteunits.PrettyPrint(stat.Rx),
+		Tx: byteunits.PrettyPrint(tx),
+		Rx: byteunits.PrettyPrint(rx),
 	}
 }
 
@@ -70,9 +70,10 @@ type peerWithStatView struct {
 }
 
 type peersListFromNodeView struct {
-	NodeUUID  string
-	ShowOwner bool
-	Peers     []peerWithStatView
+	NodeUUID            string
+	ShowOwner           bool
+	Peers               []peerWithStatView
+	TotalMonthTransStat peerPrettyTransStat
 }
 
 func (app *App) getPeersFromNodeHandler(w http.ResponseWriter, r *http.Request) error {
@@ -108,18 +109,24 @@ func (app *App) getPeersFromNodeHandler(w http.ResponseWriter, r *http.Request) 
 			return peersListFromNodeView{}, err
 		}
 
+		var totalTx, totalRx int64
+
 		peersWithStats := make([]peerWithStatView, 0, len(peers))
 		for _, peer := range peers {
+			stat := monthStats[peer.PublicKey]
 			peersWithStats = append(peersWithStats, peerWithStatView{
 				Peer:           peer,
-				MonthTransStat: newPeerPrettyTransStat(monthStats[peer.PublicKey]),
+				MonthTransStat: newPeerPrettyTransStat(stat.Tx, stat.Rx),
 			})
+			totalTx += stat.Tx
+			totalRx += stat.Rx
 		}
 
 		return peersListFromNodeView{
-			NodeUUID:  nodeUUID,
-			ShowOwner: userUUID == "",
-			Peers:     peersWithStats,
+			NodeUUID:            nodeUUID,
+			ShowOwner:           userUUID == "",
+			Peers:               peersWithStats,
+			TotalMonthTransStat: newPeerPrettyTransStat(totalTx, totalRx),
 		}, nil
 	}()
 	if err != nil {

@@ -306,3 +306,9 @@ input.add-new {
 .peers-list-container > * {
   margin: 10pt;
 }
+
+tr.peers-total {
+  background-color: #f8f8f8;
+  border-left: none;
+  border-right: none;
+}

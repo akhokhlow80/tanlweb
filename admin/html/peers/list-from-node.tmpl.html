@@ -51,6 +51,23 @@
           ></td>
         </tr>
       {{end}}
+      <tr class="peers-total">
+        <td
+          {{if $showOwner}}
+            colspan="2"
+          {{else}}
+            colspan="1"
+          {{end}}
+        >
+          Total:
+        </td>
+        <td>
+          <div>↑{{.TotalMonthTransStat.Tx}}</div>
+          <div>↓{{.TotalMonthTransStat.Rx}}</div>
+        </td>
+        <td>
+        </td>
+      </tr>
     </tbody>
   </table>
 </div>
