@@ -312,3 +312,7 @@ tr.peers-total {
   border-left: none;
   border-right: none;
 }
+
+.config-url-qr-code p {
+  font-weight: 700;
+}

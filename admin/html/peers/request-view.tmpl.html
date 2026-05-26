@@ -64,6 +64,11 @@
         <pre id="config-url" class="inline">{{.ConfigURL}}</pre>
       </div>
 
+      <div class="config-url-qr-code">
+        <p>Or let them scan QR:</p>
+        <img src='{{.ConfigURLQRImage}}' />
+      </div>
+
       <form
         hx-swap="none"
         hx-post='{{EncryptURI "peers/requests/%s/cancel" .RandomID}}'

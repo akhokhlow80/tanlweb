@@ -7,10 +7,14 @@ import (
 	"akhokhlow80/tanlweb/web"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/url"
+
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 func parsePeerRequestFromDB(dbReq *sqlgen.PeerRequest, dbOwner *sqlgen.User, dbNode *sqlgen.Node) (peers.PeerRequest, error) {
@@ -241,7 +245,8 @@ type peerRequestView struct {
 	OwnedByUserUUID     string
 	NodeUUID            string
 	NodeName            string
-	ConfigURL           string // zero if status is not pending
+	ConfigURL           string       // zero if status is not pending
+	ConfigURLQRImage    template.URL // zero if status is not pending
 
 	// To compare with real status in templates
 	ConstStatus struct {
@@ -267,14 +272,29 @@ func (app *App) parsePeerRequestViewFromDB(
 	if dbReq.RequestedByUserUuid != nil {
 		requestedBy = *dbReq.RequestedByUserUuid
 	}
+
 	status, err := peers.ParsePeerRequestStatus(dbReq.Status)
 	if err != nil {
 		return peerRequestView{}, err
 	}
-	var configURL string
+
+	var (
+		configURL        string
+		configURLQRImage string
+	)
 	if status == peers.Pending {
 		configURL = app.cfg.PeerConfigsBaseURI + "/" + url.PathEscape(dbReq.RandomID)
+		qrBytes, err := qrcode.Encode(configURL, qrcode.Medium, 256)
+		if err != nil {
+			return peerRequestView{}, fmt.Errorf("Failed to encode QR: %s", err)
+		}
+		configURLQRImage = fmt.Sprintf(
+			"data:image/png;base64,%s",
+			base64.StdEncoding.EncodeToString(qrBytes),
+		)
+		println(configURLQRImage)
 	}
+
 	return peerRequestView{
 		RandomID:            dbReq.RandomID,
 		ShortRandomID:       dbReq.RandomID[31:],
@@ -286,6 +306,7 @@ func (app *App) parsePeerRequestViewFromDB(
 		NodeUUID:            dbNode.Uuid,
 		NodeName:            dbNode.Name,
 		ConfigURL:           configURL,
+		ConfigURLQRImage:    template.URL(configURLQRImage),
 		ConstStatus: struct {
 			Pending, ConfigRequested, Created, Failed, Cancelled peers.PeerRequestStatus
 		}{
