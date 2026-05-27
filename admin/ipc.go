@@ -28,6 +28,14 @@ func (app *App) ipcHandleCmd(w io.Writer, line string) error {
 		}
 		_, err = fmt.Fprintf(w, "ok: %s\n", url)
 		return err
+	case "revoke-refresh-tokens":
+		err := app.RevokeRefreshTokens(strings.TrimRight(toks[1], "\n"))
+		if err != nil {
+			_, err := fmt.Fprintf(w, "error: failed to revoke refresh tokens: %s\n", err)
+			return err
+		}
+		_, err = fmt.Fprint(w, "ok:\n")
+		return err
 	default:
 		_, err := fmt.Fprintln(w, "error: unknown command")
 		return err
